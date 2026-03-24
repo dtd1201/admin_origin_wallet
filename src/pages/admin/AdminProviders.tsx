@@ -307,7 +307,7 @@ const AdminProviders = () => {
       </div>
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && setDialogMode(null)}>
-        <DialogContent className="rounded-[28px] sm:max-w-xl">
+        <DialogContent className="rounded-[28px] border-slate-200 bg-white text-slate-950 sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{dialogMode === "create" ? "Add provider" : "Edit provider"}</DialogTitle>
             <DialogDescription>
@@ -375,3 +375,4 @@ const AdminProviders = () => {
 };
 
 export default AdminProviders;
+

@@ -463,7 +463,7 @@ const AdminUsers = () => {
       </Card>
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && setDialogMode(null)}>
-        <DialogContent className="rounded-[28px] sm:max-w-4xl">
+        <DialogContent className="rounded-[28px] border-slate-200 bg-white text-slate-950 sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{dialogMode === "create" ? "Add user" : "Edit user"}</DialogTitle>
             <DialogDescription>
@@ -563,7 +563,7 @@ const AdminUsers = () => {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-950">Provider assignments</h3>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-600">
                     {dialogMode === "create"
                       ? "Only active providers are available for assignment when creating a user."
                       : "Each card below represents an active provider slot for this user."}
@@ -688,3 +688,4 @@ const AdminUsers = () => {
 };
 
 export default AdminUsers;
+

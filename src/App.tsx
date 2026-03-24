@@ -20,7 +20,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false} disableTransitionOnChange>
           <AuthProvider>
             <Toaster />
             <Sonner />
@@ -46,3 +46,4 @@ const App = () => {
 };
 
 export default App;
+
