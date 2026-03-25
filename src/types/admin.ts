@@ -66,6 +66,13 @@ export interface AdminUserIntegrationLinksResponse {
   data: AdminUserIntegrationLinkSlot[];
 }
 
+export interface AdminIntegrationLinkUpsertResponse {
+  message: string;
+  user_id: number;
+  provider: ProviderSummary;
+  integration_link: AdminIntegrationLink;
+  integration_request: AdminIntegrationRequest | null;
+}
 export interface AdminUser {
   id: number;
   email: string;
@@ -123,3 +130,4 @@ export interface AdminTransaction {
   completed_at?: string | null;
   created_at?: string | null;
 }
+

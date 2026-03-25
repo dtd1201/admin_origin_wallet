@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, Pencil, Plus, Search, Trash2, UserCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -140,6 +140,34 @@ const AdminUsers = () => {
     () => (providersQuery.data?.data ?? []).filter((provider) => provider.status === "active"),
     [providersQuery.data?.data],
   );
+  const listIntegrationQueries = useQueries({
+    queries: rows.map((row) => ({
+      queryKey: ["admin", "users", "list-integration-links", row.id, token],
+      enabled: !!token,
+      queryFn: async () =>
+        requestApi<AdminUserIntegrationLinksResponse>(`${adminEndpointConfig.users}/${row.id}/integration-links`, {
+          method: "GET",
+          token,
+        }),
+    })),
+  });
+
+  const pendingRequestMap = useMemo(() => {
+    return rows.reduce<Record<number, { count: number; providers: string[] }>>((accumulator, row, index) => {
+      const query = listIntegrationQueries[index];
+      const pendingProviders =
+        query?.data?.data
+          .filter((slot) => slot.integration_request?.status?.toLowerCase() === "pending")
+          .map((slot) => slot.provider.name) ?? [];
+
+      accumulator[row.id] = {
+        count: pendingProviders.length,
+        providers: pendingProviders,
+      };
+
+      return accumulator;
+    }, {});
+  }, [listIntegrationQueries, rows]);
 
   useEffect(() => {
     if (dialogMode === "create") {
@@ -250,6 +278,7 @@ const AdminUsers = () => {
       if (selectedUserId !== null) {
         await queryClient.invalidateQueries({ queryKey: ["admin", "user-detail", selectedUserId] });
         await queryClient.invalidateQueries({ queryKey: ["admin", "user-integration-links", selectedUserId] });
+        await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list-integration-links", selectedUserId] });
       }
       setDialogMode(null);
       setSelectedUserId(null);
@@ -389,67 +418,85 @@ const AdminUsers = () => {
             </TableHeader>
             <TableBody>
               {filteredRows.length > 0 ? (
-                filteredRows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700">
-                          <UserCircle2 className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-900">{row.full_name}</div>
-                          <div className="text-xs text-slate-500">#{row.id}</div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {row.roles?.length ? (
-                              row.roles.map((role, index) => (
-                                <Badge key={`${row.id}-${index}`} variant="outline">
-                                  {getRoleLabel(role)}
+                filteredRows.map((row) => {
+                  const pendingRequests = pendingRequestMap[row.id] ?? { count: 0, providers: [] };
+                  const hasPendingRequests = pendingRequests.count > 0;
+
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                            <UserCircle2 className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-slate-900">{row.full_name}</div>
+                            <div className="text-xs text-slate-500">#{row.id}</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {row.roles?.length ? (
+                                row.roles.map((role, index) => (
+                                  <Badge key={`${row.id}-${index}`} variant="outline">
+                                    {getRoleLabel(role)}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <Badge variant="outline">user</Badge>
+                              )}
+                              {hasPendingRequests && (
+                                <Badge className="bg-amber-500 text-white hover:bg-amber-500">
+                                  {pendingRequests.count} pending request{pendingRequests.count > 1 ? "s" : ""}
                                 </Badge>
-                              ))
-                            ) : (
-                              <Badge variant="outline">user</Badge>
+                              )}
+                            </div>
+                            {hasPendingRequests && (
+                              <div className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-amber-700">
+                                Waiting on: {pendingRequests.providers.join(", ")}
+                              </div>
                             )}
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="inline-flex items-center gap-2 text-slate-700">
-                        <Mail className="h-4 w-4 text-slate-400" />
-                        {row.email}
-                      </div>
-                      <div className="mt-1 text-sm text-slate-500">{row.phone || "No phone"}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-slate-900">{row.profile?.user_type || "No profile"}</div>
-                      <div className="text-sm text-slate-500">{row.profile?.country_code || "-"}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-2">
-                        <Badge variant="secondary">{row.status}</Badge>
-                        <Badge variant="outline">KYC {row.kyc_status}</Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
-                          <Pencil className="h-4 w-4" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                          onClick={() => void handleDelete(row)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell>
+                        <div className="inline-flex items-center gap-2 text-slate-700">
+                          <Mail className="h-4 w-4 text-slate-400" />
+                          {row.email}
+                        </div>
+                        <div className="mt-1 text-sm text-slate-500">{row.phone || "No phone"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-slate-900">{row.profile?.user_type || "No profile"}</div>
+                        <div className="text-sm text-slate-500">{row.profile?.country_code || "-"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-2">
+                          <Badge variant="secondary">{row.status}</Badge>
+                          <Badge variant="outline">KYC {row.kyc_status}</Badge>
+                          {hasPendingRequests && (
+                            <Badge className="w-fit bg-amber-100 text-amber-900 hover:bg-amber-100">Integration request pending</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => void handleDelete(row)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={5} className="py-12 text-center text-slate-500">
@@ -688,4 +735,3 @@ const AdminUsers = () => {
 };
 
 export default AdminUsers;
-
