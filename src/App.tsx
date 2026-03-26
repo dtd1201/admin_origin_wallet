@@ -9,6 +9,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminNotFound from "@/pages/admin/AdminNotFound";
+import AdminContactSubmissions from "@/pages/admin/AdminContactSubmissions";
 import AdminProviders from "@/pages/admin/AdminProviders";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminTransactions from "@/pages/admin/AdminTransactions";
@@ -33,6 +34,7 @@ const App = () => {
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="providers" element={<AdminProviders />} />
                   <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="contact-submissions" element={<AdminContactSubmissions />} />
                   <Route path="settings" element={<AdminSettings />} />
                 </Route>
                 <Route path="*" element={<AdminNotFound />} />
@@ -46,4 +48,3 @@ const App = () => {
 };
 
 export default App;
-

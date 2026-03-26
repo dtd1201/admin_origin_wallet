@@ -1,3 +1,5 @@
+import type { ContactSubmission } from "@/types/admin";
+
 export interface ApiValidationErrors {
   [field: string]: string[];
 }
@@ -5,6 +7,16 @@ export interface ApiValidationErrors {
 export interface ApiErrorPayload {
   message?: string;
   errors?: ApiValidationErrors;
+}
+
+export class ApiRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
 }
 
 export interface PaginatedResponse<T> {
@@ -36,7 +48,20 @@ export const adminEndpointConfig = {
   users: import.meta.env.VITE_ADMIN_USERS_PATH || "/admin/users",
   providers: import.meta.env.VITE_ADMIN_PROVIDERS_PATH || "/admin/integration-providers",
   transactions: import.meta.env.VITE_ADMIN_TRANSACTIONS_PATH || "/admin/transactions",
+  contactSubmissions: import.meta.env.VITE_ADMIN_CONTACT_SUBMISSIONS_PATH || "/admin/contact-submissions",
 };
+
+export const getContactSubmissions = (page = 1, token?: string | null) =>
+  requestApi<PaginatedResponse<ContactSubmission>>(`${adminEndpointConfig.contactSubmissions}?page=${page}`, {
+    method: "GET",
+    token,
+  });
+
+export const getContactSubmissionDetail = (id: number | string, token?: string | null) =>
+  requestApi<ContactSubmission>(`${adminEndpointConfig.contactSubmissions}/${id}`, {
+    method: "GET",
+    token,
+  });
 
 export const buildApiUrl = (path: string) => {
   if (!apiBaseUrl) {
@@ -90,7 +115,7 @@ export const requestApi = async <TResponse>(
   }
 
   if (!response.ok) {
-    throw new Error(await getResponseError(response));
+    throw new ApiRequestError(await getResponseError(response), response.status);
   }
 
   if (response.status === 204) {

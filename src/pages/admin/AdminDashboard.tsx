@@ -271,14 +271,14 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="px-6 py-6 lg:px-10 lg:py-8">
+    <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-6">
           <section className="rounded-[32px] border border-white/10 bg-[#0d1a27] p-6 text-white shadow-[0_20px_60px_rgba(3,10,18,0.35)]">
             <Badge className="rounded-full bg-emerald-400 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-950 hover:bg-emerald-400">
               Live workspace
             </Badge>
-            <h2 className="mt-4 text-3xl font-bold">Operations overview</h2>
+            <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Operations overview</h2>
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-300">
               A quick snapshot of user activity, providers, and transactions across the admin workspace.
             </p>
@@ -308,7 +308,7 @@ const AdminDashboard = () => {
                   <div key={entry.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                     <div className="text-xs uppercase tracking-[0.22em] text-slate-500">User #{entry.id}</div>
                     <div className="mt-2 text-lg font-semibold text-slate-950">{entry.full_name}</div>
-                    <div className="mt-1 text-sm text-slate-600">{entry.email}</div>
+                    <div className="mt-1 break-all text-sm text-slate-600">{entry.email}</div>
                     <div className="mt-3 flex gap-2">
                       <Badge variant="secondary">{entry.status}</Badge>
                       <Badge variant="outline">KYC {entry.kyc_status}</Badge>
@@ -344,8 +344,7 @@ const AdminDashboard = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-semibold text-slate-950">{entry.providerName}</div>
-                        <div className="text-sm text-slate-600">
-                          {entry.userName} - {entry.userEmail}
+                        <div className="break-words text-sm text-slate-600">{entry.userName} - {entry.userEmail}
                         </div>
                       </div>
                       <Badge className="bg-amber-500 text-white hover:bg-amber-500">{entry.status}</Badge>
@@ -386,7 +385,7 @@ const AdminDashboard = () => {
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Email</div>
-                <div className="mt-2 text-lg font-semibold text-slate-950">{user?.email ?? "Not available"}</div>
+                <div className="mt-2 break-all text-lg font-semibold text-slate-950">{user?.email ?? "Not available"}</div>
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Roles</div>
@@ -523,3 +522,5 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+
+

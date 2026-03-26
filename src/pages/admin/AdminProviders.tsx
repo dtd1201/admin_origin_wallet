@@ -190,7 +190,7 @@ const AdminProviders = () => {
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="px-6 py-6 lg:px-10 lg:py-8">
+    <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -208,80 +208,143 @@ const AdminProviders = () => {
               <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{deleteError}</div>
             )}
 
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Capabilities</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.length > 0 ? (
-                  rows.map((row) => {
-                    const capabilities = [
-                      row.supports_beneficiaries && "beneficiaries",
-                      row.supports_data_sync && "sync",
-                      row.supports_quotes && "quotes",
-                      row.supports_transfers && "transfers",
-                      row.supports_webhooks && "webhooks",
-                    ].filter(Boolean);
+            <div className="space-y-4 lg:hidden">
+              {rows.length > 0 ? (
+                rows.map((row) => {
+                  const capabilities = [
+                    row.supports_beneficiaries && "beneficiaries",
+                    row.supports_data_sync && "sync",
+                    row.supports_quotes && "quotes",
+                    row.supports_transfers && "transfers",
+                    row.supports_webhooks && "webhooks",
+                  ].filter(Boolean);
 
-                    return (
-                      <TableRow key={row.code}>
-                        <TableCell>
+                  return (
+                    <div key={row.code} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium text-slate-900">{row.name}</div>
-                          <div className="text-xs text-slate-500">#{row.id}</div>
-                        </TableCell>
-                        <TableCell>{row.code}</TableCell>
-                        <TableCell>
-                          <Badge variant={row.status === "active" ? "default" : "secondary"}>{row.status}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {capabilities.length ? (
-                              capabilities.map((item) => (
-                                <Badge key={item} variant="outline">
-                                  {item}
-                                </Badge>
-                              ))
-                            ) : (
-                              <span className="text-sm text-slate-500">No capability flags</span>
-                            )}
+                          <div className="mt-1 text-xs text-slate-500">
+                            #{row.id} • <span className="break-all">{row.code}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                              onClick={() => void handleDelete(row)}
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
+                        </div>
+                        <Badge variant={row.status === "active" ? "default" : "secondary"}>{row.status}</Badge>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {capabilities.length ? (
+                          capabilities.map((item) => (
+                            <Badge key={item} variant="outline">
+                              {item}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-sm text-slate-500">No capability flags</span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => void handleDelete(row)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-300 py-12 text-center text-slate-500">
+                  {providersQuery.isLoading ? "Loading providers..." : "No providers are available right now."}
+                </div>
+              )}
+            </div>
+
+            <div className="hidden lg:block">
+              <Table className="min-w-[820px]">
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="py-12 text-center text-slate-500">
-                      {providersQuery.isLoading ? "Loading providers..." : "No providers are available right now."}
-                    </TableCell>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Capabilities</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {rows.length > 0 ? (
+                    rows.map((row) => {
+                      const capabilities = [
+                        row.supports_beneficiaries && "beneficiaries",
+                        row.supports_data_sync && "sync",
+                        row.supports_quotes && "quotes",
+                        row.supports_transfers && "transfers",
+                        row.supports_webhooks && "webhooks",
+                      ].filter(Boolean);
+
+                      return (
+                        <TableRow key={row.code}>
+                          <TableCell>
+                            <div className="font-medium text-slate-900">{row.name}</div>
+                            <div className="text-xs text-slate-500">#{row.id}</div>
+                          </TableCell>
+                          <TableCell>{row.code}</TableCell>
+                          <TableCell>
+                            <Badge variant={row.status === "active" ? "default" : "secondary"}>{row.status}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-2">
+                              {capabilities.length ? (
+                                capabilities.map((item) => (
+                                  <Badge key={item} variant="outline">
+                                    {item}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-sm text-slate-500">No capability flags</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => void handleDelete(row)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-12 text-center text-slate-500">
+                        {providersQuery.isLoading ? "Loading providers..." : "No providers are available right now."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -375,4 +438,3 @@ const AdminProviders = () => {
 };
 
 export default AdminProviders;
-

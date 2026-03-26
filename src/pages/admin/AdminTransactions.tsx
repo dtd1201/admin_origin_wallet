@@ -19,7 +19,7 @@ const AdminTransactions = () => {
   const rows = transactionsQuery.data?.data ?? [];
 
   return (
-    <div className="px-6 py-6 lg:px-10 lg:py-8">
+    <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader>
@@ -27,49 +27,83 @@ const AdminTransactions = () => {
             <CardDescription>Monitor transfer activity and track current processing states.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>User / Provider</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.length > 0 ? (
-                  rows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
+            <div className="space-y-4 lg:hidden">
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <div key={row.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-900">{row.transfer_no || `Transaction #${row.id}`}</div>
                         <div className="text-xs text-slate-500">{row.created_at || row.submitted_at || "No timestamp"}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-slate-900">User #{row.user_id}</div>
-                        <div className="text-xs text-slate-500">Provider #{row.provider_id}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium text-slate-900">
-                          {row.source_amount || "-"} {row.source_currency || ""}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {row.target_amount || "-"} {row.target_currency || ""}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{row.status}</Badge>
+                      </div>
+                      <Badge variant="secondary">{row.status}</Badge>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 text-sm text-slate-600">
+                      <div>
+                        User #{row.user_id} • Provider #{row.provider_id}
+                      </div>
+                      <div className="font-medium text-slate-900">
+                        {row.source_amount || "-"} {row.source_currency || ""}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {row.target_amount || "-"} {row.target_currency || ""}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-300 py-12 text-center text-slate-500">
+                  {transactionsQuery.isLoading ? "Loading transactions..." : "No transactions are available right now."}
+                </div>
+              )}
+            </div>
+
+            <div className="hidden lg:block">
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>User / Provider</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.length > 0 ? (
+                    rows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <div className="font-medium text-slate-900">{row.transfer_no || `Transaction #${row.id}`}</div>
+                          <div className="text-xs text-slate-500">{row.created_at || row.submitted_at || "No timestamp"}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-slate-900">User #{row.user_id}</div>
+                          <div className="text-xs text-slate-500">Provider #{row.provider_id}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-slate-900">
+                            {row.source_amount || "-"} {row.source_currency || ""}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {row.target_amount || "-"} {row.target_currency || ""}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{row.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-12 text-center text-slate-500">
+                        {transactionsQuery.isLoading ? "Loading transactions..." : "No transactions are available right now."}
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-12 text-center text-slate-500">
-                      {transactionsQuery.isLoading ? "Loading transactions..." : "No transactions are available right now."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 

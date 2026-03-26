@@ -131,3 +131,18 @@ export interface AdminTransaction {
   created_at?: string | null;
 }
 
+
+export interface ContactSubmission {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  subject: string;
+  message: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  submitted_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+

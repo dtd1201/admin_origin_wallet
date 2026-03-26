@@ -112,12 +112,12 @@ const AdminLogin = () => {
           className="w-full max-w-xl"
         >
           <Card className="overflow-hidden rounded-[32px] border border-white/60 bg-white/90 shadow-[0_30px_90px_rgba(8,19,30,0.24)] backdrop-blur">
-            <CardHeader className="space-y-5 border-b border-slate-100 bg-white/80 px-8 py-8">
+            <CardHeader className="space-y-5 border-b border-slate-100 bg-white/80 px-5 py-6 sm:px-8 sm:py-8">
               <div className="space-y-2">
-                <CardTitle className="text-3xl font-bold text-slate-950">
+                <CardTitle className="text-2xl font-bold text-slate-950 sm:text-3xl">
                   {step === "credentials" ? "Admin sign in" : "Verify your admin session"}
                 </CardTitle>
-                <CardDescription className="text-base leading-7 text-slate-600">
+                <CardDescription className="break-words text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   {step === "credentials"
                     ? "Only accounts with admin roles can complete this sign-in flow."
                     : `Enter the verification code sent to ${email}.`}
@@ -125,7 +125,7 @@ const AdminLogin = () => {
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-5 px-8 py-8">
+            <CardContent className="space-y-5 px-5 py-6 sm:px-8 sm:py-8">
               {(error || authError) && (
                 <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -194,7 +194,7 @@ const AdminLogin = () => {
                         id="verificationCode"
                         value={verificationCode}
                         onChange={(event) => setVerificationCode(event.target.value)}
-                        className="h-12 rounded-2xl border-slate-200 pl-11 tracking-[0.3em]"
+                        className="h-12 rounded-2xl border-slate-200 pl-11 tracking-[0.18em] sm:tracking-[0.3em]"
                         placeholder="123456"
                         inputMode="numeric"
                         autoComplete="one-time-code"
@@ -237,3 +237,4 @@ const AdminLogin = () => {
 };
 
 export default AdminLogin;
+

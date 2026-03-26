@@ -7,11 +7,11 @@ const AdminSettings = () => {
   const { user, refreshSession, logout } = useAuth();
 
   return (
-    <div className="px-6 py-6 lg:px-10 lg:py-8">
+    <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-2xl">
+            <CardTitle className="flex flex-wrap items-center gap-3 text-2xl">
               Session details
               <Badge className="bg-emerald-500 hover:bg-emerald-500">Admin access</Badge>
             </CardTitle>
@@ -24,7 +24,7 @@ const AdminSettings = () => {
             </div>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Email</div>
-              <div className="mt-2 text-lg font-semibold text-slate-950">{user?.email ?? "Not available"}</div>
+              <div className="mt-2 break-all text-lg font-semibold text-slate-950">{user?.email ?? "Not available"}</div>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Status</div>
@@ -68,3 +68,4 @@ const AdminSettings = () => {
 };
 
 export default AdminSettings;
+
