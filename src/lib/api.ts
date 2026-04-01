@@ -63,6 +63,12 @@ export const getContactSubmissionDetail = (id: number | string, token?: string |
     token,
   });
 
+export const deleteContactSubmission = (id: number | string, token?: string | null) =>
+  requestApi<null>(`${adminEndpointConfig.contactSubmissions}/${id}`, {
+    method: "DELETE",
+    token,
+  });
+
 export const buildApiUrl = (path: string) => {
   if (!apiBaseUrl) {
     throw new Error("Missing VITE_API_BASE_URL");

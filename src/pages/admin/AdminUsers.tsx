@@ -97,6 +97,18 @@ const normalizeIntegrationSlots = (slots: AdminUserIntegrationLinkSlot[]): Integ
   }));
 };
 
+const buildIntegrationLinksPayload = (links: IntegrationLinkForm[]) => {
+  return links
+    .map((link) => ({
+      provider_code: link.provider_code,
+      link_url: link.link_url.trim(),
+      link_label: link.link_label.trim(),
+      is_active: link.is_active,
+      enabled: link.enabled,
+    }))
+    .filter((link) => link.enabled && link.link_url);
+};
+
 const AdminUsers = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -232,14 +244,7 @@ const AdminUsers = () => {
           password: payload.password,
           status: payload.status,
           kyc_status: payload.kyc_status,
-          integration_links: payload.integration_links
-            .filter((link) => link.enabled)
-            .map((link) => ({
-              provider_code: link.provider_code,
-              link_url: link.link_url.trim(),
-              link_label: link.link_label.trim(),
-              is_active: link.is_active,
-            })),
+          integration_links: buildIntegrationLinksPayload(payload.integration_links),
         },
       }),
     onSuccess: async () => {
@@ -263,14 +268,7 @@ const AdminUsers = () => {
           full_name: payload.full_name.trim(),
           status: payload.status,
           ...(payload.password.trim() ? { password: payload.password } : {}),
-          integration_links: payload.integration_links
-            .filter((link) => link.enabled)
-            .map((link) => ({
-              provider_code: link.provider_code,
-              link_url: link.link_url.trim(),
-              link_label: link.link_label.trim(),
-              is_active: link.is_active,
-            })),
+          integration_links: buildIntegrationLinksPayload(payload.integration_links),
         },
       }),
     onSuccess: async () => {
@@ -440,7 +438,7 @@ const AdminUsers = () => {
                       </div>
                       <div>{row.phone || "No phone"}</div>
                       <div>
-                        {row.profile?.user_type || "No profile"} • {row.profile?.country_code || "-"}
+                        {row.profile?.user_type || "No profile"} - {row.profile?.country_code || "-"}
                       </div>
                     </div>
 
@@ -735,7 +733,7 @@ const AdminUsers = () => {
                         )}
                       </div>
 
-                      {linkState.request_note && (
+                      {linkState.request_note && !(linkState.link_url.trim() && linkState.is_active) && (
                         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                           {linkState.request_note}
                         </div>
@@ -819,5 +817,4 @@ const AdminUsers = () => {
 };
 
 export default AdminUsers;
-
 

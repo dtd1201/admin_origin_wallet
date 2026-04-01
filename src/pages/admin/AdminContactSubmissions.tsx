@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Eye, Inbox, Loader2, Mail, ShieldAlert } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, Inbox, Loader2, Mail, ShieldAlert, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ApiRequestError, getContactSubmissionDetail, getContactSubmissions } from "@/lib/api";
+import { ApiRequestError, deleteContactSubmission, getContactSubmissionDetail, getContactSubmissions } from "@/lib/api";
 import type { ContactSubmission } from "@/types/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,9 +65,11 @@ const buildVisiblePages = (currentPage: number, lastPage: number) => {
 
 const AdminContactSubmissions = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { token, logout } = useAuth();
   const [page, setPage] = useState(1);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const submissionsQuery = useQuery({
     queryKey: ["admin", "contact-submissions", page, token],
@@ -83,9 +85,23 @@ const AdminContactSubmissions = () => {
     queryFn: async () => getContactSubmissionDetail(selectedSubmissionId as number, token),
     retry: false,
   });
+  const deleteMutation = useMutation({
+    mutationFn: async (submissionId: number) => deleteContactSubmission(submissionId, token),
+    onSuccess: async (_, deletedSubmissionId) => {
+      await queryClient.invalidateQueries({ queryKey: ["admin", "contact-submissions"] });
+      if (selectedSubmissionId === deletedSubmissionId) {
+        setSelectedSubmissionId(null);
+      }
+      setDeleteError("");
+      setPage((currentPage) => (rows.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage));
+    },
+    onError: (error) => {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete contact submission.");
+    },
+  });
 
   useEffect(() => {
-    const currentError = submissionsQuery.error ?? detailQuery.error;
+    const currentError = submissionsQuery.error ?? detailQuery.error ?? deleteMutation.error;
 
     if (!(currentError instanceof ApiRequestError)) {
       return;
@@ -131,6 +147,16 @@ const AdminContactSubmissions = () => {
   };
 
   const selectedSubmission = detailQuery.data;
+
+  const handleDelete = async (submission: ContactSubmission) => {
+    setDeleteError("");
+    const confirmed = window.confirm(`Delete contact submission from ${submission.name} (#${submission.id})?`);
+    if (!confirmed) {
+      return;
+    }
+
+    await deleteMutation.mutateAsync(submission.id);
+  };
   const listErrorMessage = submissionsQuery.isError
     ? getErrorMessage(submissionsQuery.error, "Unable to load contact submissions right now.")
     : "";
@@ -152,8 +178,8 @@ const AdminContactSubmissions = () => {
             </Badge>
           </CardHeader>
           <CardContent>
-            {listErrorMessage && (
-              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{listErrorMessage}</div>
+            {(deleteError || listErrorMessage) && (
+              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{deleteError || listErrorMessage}</div>
             )}
 
             <div className="space-y-4 lg:hidden">
@@ -168,21 +194,31 @@ const AdminContactSubmissions = () => {
                 </div>
               ) : rows.length > 0 ? (
                 rows.map((row) => (
-                  <button
+                  <div
                     key={row.id}
-                    type="button"
-                    onClick={() => openDetail(row)}
-                    className="block w-full rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                    className="rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-900">{row.name}</div>
                         <div className="mt-1 break-all text-sm text-slate-600">{row.email}</div>
                       </div>
-                      <Button variant="outline" size="sm" className="pointer-events-none">
-                        <Eye className="h-4 w-4" />
-                        View
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openDetail(row)}>
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => void handleDelete(row)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="mt-4 grid gap-2 text-sm text-slate-600">
@@ -196,7 +232,7 @@ const AdminContactSubmissions = () => {
                         <span className="font-medium text-slate-900">Submitted:</span> {formatSubmittedAt(row.submitted_at)}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 py-12 text-center text-slate-500">
@@ -258,6 +294,20 @@ const AdminContactSubmissions = () => {
                             >
                               <Eye className="h-4 w-4" />
                               View
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDelete(row);
+                              }}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
                             </Button>
                           </div>
                         </TableCell>
@@ -399,6 +449,17 @@ const AdminContactSubmissions = () => {
           ) : null}
 
           <DialogFooter>
+            {selectedSubmission && (
+              <Button
+                variant="outline"
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={() => void handleDelete(selectedSubmission)}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setSelectedSubmissionId(null)}>
               Close
             </Button>
