@@ -30,6 +30,28 @@ export interface ProviderSummary {
   supports_webhooks?: boolean;
 }
 
+export interface ManagedExchangeRate {
+  id: number;
+  rate_type: "provider" | "bank";
+  audience: "public" | "authenticated";
+  provider_id?: number | null;
+  provider?: ProviderSummary | null;
+  source_code: string;
+  source_name: string;
+  source_currency: string;
+  target_currency: string;
+  buy_rate: string | number | null;
+  sell_rate: string | number | null;
+  mid_rate: string | number | null;
+  fee_amount: string | number;
+  status: string;
+  display_order: number;
+  notes?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface AdminIntegrationLink {
   id?: number;
   user_id?: number;
@@ -145,4 +167,3 @@ export interface ContactSubmission {
   created_at?: string | null;
   updated_at?: string | null;
 }
-

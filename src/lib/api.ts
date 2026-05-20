@@ -47,6 +47,7 @@ export const adminAuthEndpointConfig = {
 export const adminEndpointConfig = {
   users: import.meta.env.VITE_ADMIN_USERS_PATH || "/admin/users",
   providers: import.meta.env.VITE_ADMIN_PROVIDERS_PATH || "/admin/integration-providers",
+  exchangeRates: import.meta.env.VITE_ADMIN_EXCHANGE_RATES_PATH || "/admin/exchange-rates",
   transactions: import.meta.env.VITE_ADMIN_TRANSACTIONS_PATH || "/admin/transactions",
   contactSubmissions: import.meta.env.VITE_ADMIN_CONTACT_SUBMISSIONS_PATH || "/admin/contact-submissions",
 };
