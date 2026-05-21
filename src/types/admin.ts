@@ -113,6 +113,124 @@ export interface AdminUserDetail extends AdminUser {
   available_providers: ProviderSummary[];
 }
 
+export interface AdminKycDocument {
+  id: number;
+  kyc_profile_id?: number;
+  kyc_related_person_id?: number | null;
+  type: string;
+  status: string;
+  file_url: string;
+  storage_disk?: string | null;
+  file_path?: string | null;
+  original_name?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
+  file_hash?: string | null;
+  side?: string | null;
+  document_number?: string | null;
+  issuing_country_code?: string | null;
+  issued_at?: string | null;
+  expires_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminKycRelatedPerson {
+  id: number;
+  kyc_profile_id?: number;
+  relationship_type: string;
+  status: string;
+  legal_name: string;
+  date_of_birth?: string | null;
+  nationality_country_code?: string | null;
+  residence_country_code?: string | null;
+  ownership_percentage?: string | number | null;
+  address_line1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code?: string | null;
+  documents?: AdminKycDocument[];
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminKycRequirement {
+  id: number;
+  key: string;
+  label: string;
+  category: string;
+  status: string;
+  requirement_type: string;
+  subject_type?: string | null;
+  subject_id?: number | null;
+  review_note?: string | null;
+  rejection_reason?: string | null;
+}
+
+export interface AdminAmlMatch {
+  id: number;
+  list_type: string;
+  source: string;
+  matched_name: string;
+  score?: string | number | null;
+  country_code?: string | null;
+  status: string;
+}
+
+export interface AdminAmlScreening {
+  id: number;
+  subject_name: string;
+  subject_role: string;
+  screening_provider: string;
+  status: string;
+  risk_level?: string | null;
+  risk_score?: string | number | null;
+  screened_at?: string | null;
+  review_note?: string | null;
+  matches?: AdminAmlMatch[];
+}
+
+export interface AdminKycProfile {
+  id: number;
+  user_id: number;
+  user?: AdminUser | null;
+  status: string;
+  applicant_type: "individual" | "business" | string;
+  legal_name: string;
+  date_of_birth?: string | null;
+  nationality_country_code?: string | null;
+  residence_country_code?: string | null;
+  business_name?: string | null;
+  business_registration_number?: string | null;
+  tax_id?: string | null;
+  registered_country_code?: string | null;
+  address_line1: string;
+  address_line2?: string | null;
+  city: string;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code: string;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: AdminUser | null;
+  review_note?: string | null;
+  rejection_reason?: string | null;
+  documents?: AdminKycDocument[];
+  related_persons?: AdminKycRelatedPerson[];
+  requirements?: AdminKycRequirement[];
+  aml_screenings?: AdminAmlScreening[];
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminKycReviewResponse {
+  message?: string;
+  user?: AdminUser;
+  kyc_profile: AdminKycProfile;
+  kyc_submission?: AdminKycProfile;
+}
+
 export interface AdminOnboarding {
   profile_completed: boolean;
   selected_provider_code: string | null;

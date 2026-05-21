@@ -12,6 +12,7 @@ import AdminNotFound from "@/pages/admin/AdminNotFound";
 import AdminContactSubmissions from "@/pages/admin/AdminContactSubmissions";
 import AdminProviders from "@/pages/admin/AdminProviders";
 import AdminExchangeRates from "@/pages/admin/AdminExchangeRates";
+import AdminKycReviews from "@/pages/admin/AdminKycReviews";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminTransactions from "@/pages/admin/AdminTransactions";
 import AdminUsers from "@/pages/admin/AdminUsers";
@@ -34,7 +35,9 @@ const App = () => {
                   <Route index element={<AdminDashboard />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="providers" element={<AdminProviders />} />
-                  <Route path="exchange-rates" element={<AdminExchangeRates />} />
+                  <Route path="kyc-reviews" element={<AdminKycReviews />} />
+                  <Route path="exchange-rates" element={<AdminExchangeRates mode="provider" />} />
+                  <Route path="customer-rates" element={<AdminExchangeRates mode="customer" />} />
                   <Route path="transactions" element={<AdminTransactions />} />
                   <Route path="contact-submissions" element={<AdminContactSubmissions />} />
                   <Route path="settings" element={<AdminSettings />} />

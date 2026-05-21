@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleDollarSign, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
 import type { ManagedExchangeRate } from "@/types/admin";
@@ -43,7 +43,39 @@ type RateFormState = {
   notes: string;
 };
 
-const emptyForm: RateFormState = {
+type AdminExchangeRatesProps = {
+  mode?: "provider" | "customer";
+};
+
+type ProviderRateGroup = {
+  key: string;
+  sourceCode: string;
+  sourceName: string;
+  rows: ManagedExchangeRate[];
+  pairs: string[];
+  currencies: string[];
+  publicCount: number;
+  signedInCount: number;
+  activeCount: number;
+};
+
+const providerEmptyForm: RateFormState = {
+  rate_type: "provider",
+  audience: "public",
+  source_code: "",
+  source_name: "",
+  source_currency: "USD",
+  target_currency: "VND",
+  buy_rate: "",
+  sell_rate: "",
+  mid_rate: "",
+  fee_amount: "0",
+  status: "active",
+  display_order: "0",
+  notes: "",
+};
+
+const customerEmptyForm: RateFormState = {
   rate_type: "bank",
   audience: "public",
   source_code: "",
@@ -72,30 +104,82 @@ const formatRate = (value: string | number | null | undefined) => {
     : String(value);
 };
 
-const AdminExchangeRates = () => {
+const groupProviderRates = (rows: ManagedExchangeRate[]): ProviderRateGroup[] => {
+  const groups = new Map<string, ManagedExchangeRate[]>();
+
+  rows.forEach((row) => {
+    const key = row.source_code.toLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  });
+
+  return Array.from(groups.entries())
+    .map(([key, groupRows]) => {
+      const sortedRows = [...groupRows].sort((left, right) => {
+        const leftPair = `${left.source_currency}/${left.target_currency}`;
+        const rightPair = `${right.source_currency}/${right.target_currency}`;
+        return leftPair.localeCompare(rightPair) || left.audience.localeCompare(right.audience);
+      });
+      const pairs = Array.from(
+        new Set(sortedRows.map((row) => `${row.source_currency}/${row.target_currency}`)),
+      ).sort();
+      const currencies = Array.from(
+        new Set(sortedRows.flatMap((row) => [row.source_currency, row.target_currency])),
+      ).sort();
+
+      return {
+        key,
+        sourceCode: sortedRows[0]?.source_code ?? key,
+        sourceName: sortedRows[0]?.source_name ?? key,
+        rows: sortedRows,
+        pairs,
+        currencies,
+        publicCount: sortedRows.filter((row) => row.audience === "public").length,
+        signedInCount: sortedRows.filter((row) => row.audience === "authenticated").length,
+        activeCount: sortedRows.filter((row) => row.status === "active").length,
+      };
+    })
+    .sort((left, right) => left.sourceName.localeCompare(right.sourceName));
+};
+
+const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
+  const isProviderMode = mode === "provider";
   const [rateTypeFilter, setRateTypeFilter] = useState<"all" | "provider" | "bank">("all");
   const [audienceFilter, setAudienceFilter] = useState<"all" | "public" | "authenticated">("all");
   const [dialogMode, setDialogMode] = useState<"create" | "edit" | null>(null);
   const [selectedRate, setSelectedRate] = useState<ManagedExchangeRate | null>(null);
-  const [formState, setFormState] = useState<RateFormState>(emptyForm);
+  const [formState, setFormState] = useState<RateFormState>(isProviderMode ? providerEmptyForm : customerEmptyForm);
   const [formError, setFormError] = useState("");
 
-  const queryPath = [
-    adminEndpointConfig.exchangeRates,
-    "?",
-    rateTypeFilter !== "all" ? `rate_type=${rateTypeFilter}&` : "",
-    audienceFilter !== "all" ? `audience=${audienceFilter}&` : "",
-  ].join("");
+  const effectiveRateTypeFilter = isProviderMode ? "provider" : rateTypeFilter;
+  const queryPath = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (effectiveRateTypeFilter !== "all") {
+      params.set("rate_type", effectiveRateTypeFilter);
+    }
+
+    if (audienceFilter !== "all") {
+      params.set("audience", audienceFilter);
+    }
+
+    const query = params.toString();
+    return query ? `${adminEndpointConfig.exchangeRates}?${query}` : adminEndpointConfig.exchangeRates;
+  }, [audienceFilter, effectiveRateTypeFilter]);
 
   const ratesQuery = useQuery({
-    queryKey: ["admin", "exchange-rates", rateTypeFilter, audienceFilter, token],
+    queryKey: ["admin", "exchange-rates", mode, effectiveRateTypeFilter, audienceFilter, token],
     enabled: !!token,
     queryFn: async () => requestApi<PaginatedResponse<ManagedExchangeRate>>(queryPath, { method: "GET", token }),
   });
 
   const rows = ratesQuery.data?.data ?? [];
+  const providerGroups = useMemo(() => groupProviderRates(rows), [rows]);
+  const title = isProviderMode ? "Provider exchange rates" : "Customer display rates";
+  const description = isProviderMode
+    ? "Manage each provider by supported currency pair. Add one row for every currency pair the provider supports."
+    : "Manage rates that are published to public visitors and signed-in customers in the mobile app.";
 
   const invalidateRates = async () => {
     await queryClient.invalidateQueries({ queryKey: ["admin", "exchange-rates"] });
@@ -111,7 +195,7 @@ const AdminExchangeRates = () => {
     onSuccess: async () => {
       await invalidateRates();
       setDialogMode(null);
-      setFormState(emptyForm);
+      setFormState(isProviderMode ? providerEmptyForm : customerEmptyForm);
       setFormError("");
     },
     onError: (error) => setFormError(error instanceof Error ? error.message : "Unable to create exchange rate."),
@@ -128,7 +212,7 @@ const AdminExchangeRates = () => {
       await invalidateRates();
       setDialogMode(null);
       setSelectedRate(null);
-      setFormState(emptyForm);
+      setFormState(isProviderMode ? providerEmptyForm : customerEmptyForm);
       setFormError("");
     },
     onError: (error) => setFormError(error instanceof Error ? error.message : "Unable to update exchange rate."),
@@ -146,7 +230,7 @@ const AdminExchangeRates = () => {
 
   const openCreateDialog = () => {
     setSelectedRate(null);
-    setFormState(emptyForm);
+    setFormState(isProviderMode ? providerEmptyForm : customerEmptyForm);
     setFormError("");
     setDialogMode("create");
   };
@@ -218,28 +302,28 @@ const AdminExchangeRates = () => {
       <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <CardTitle className="text-2xl">Exchange rates</CardTitle>
-            <CardDescription>
-              Maintain provider and Vietnam bank rates for public visitors and signed-in users.
-            </CardDescription>
+            <CardTitle className="text-2xl">{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
           </div>
           <Button onClick={openCreateDialog} className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800">
             <Plus className="h-4 w-4" />
-            Add rate
+            {isProviderMode ? "Add provider pair" : "Add display rate"}
           </Button>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select value={rateTypeFilter} onValueChange={(value: "all" | "provider" | "bank") => setRateTypeFilter(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Rate type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                <SelectItem value="provider">Providers</SelectItem>
-                <SelectItem value="bank">Vietnam banks</SelectItem>
-              </SelectContent>
-            </Select>
+            {!isProviderMode && (
+              <Select value={rateTypeFilter} onValueChange={(value: "all" | "provider" | "bank") => setRateTypeFilter(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Rate type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All display types</SelectItem>
+                  <SelectItem value="provider">Provider overrides</SelectItem>
+                  <SelectItem value="bank">Vietnam banks</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Select
               value={audienceFilter}
               onValueChange={(value: "all" | "public" | "authenticated") => setAudienceFilter(value)}
@@ -257,105 +341,215 @@ const AdminExchangeRates = () => {
 
           {formError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{formError}</div>}
 
-          <div className="overflow-x-auto">
-            <Table className="min-w-[980px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Audience</TableHead>
-                  <TableHead>Pair</TableHead>
-                  <TableHead>Buy</TableHead>
-                  <TableHead>Sell</TableHead>
-                  <TableHead>Mid</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.length > 0 ? (
-                  rows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <div className="font-medium text-slate-900">{row.source_name}</div>
-                        <div className="text-xs text-slate-500">{row.source_code}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{row.rate_type}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={row.audience === "authenticated" ? "default" : "secondary"}>
-                          {row.audience === "authenticated" ? "signed-in" : "public"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {row.source_currency}/{row.target_currency}
-                      </TableCell>
-                      <TableCell>{formatRate(row.buy_rate)}</TableCell>
-                      <TableCell>{formatRate(row.sell_rate)}</TableCell>
-                      <TableCell>{formatRate(row.mid_rate)}</TableCell>
-                      <TableCell>{row.status}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() => {
-                              if (window.confirm(`Delete rate for ${row.source_name}?`)) {
-                                void deleteMutation.mutateAsync(row.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </Button>
+          {isProviderMode ? (
+            <div className="space-y-4">
+              {providerGroups.length > 0 ? (
+                providerGroups.map((group) => (
+                  <div key={group.key} className="rounded-3xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-slate-950">{group.sourceName}</h3>
+                          <Badge variant="outline">{group.sourceCode}</Badge>
+                          <Badge variant="secondary">{group.pairs.length} pairs</Badge>
                         </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {group.currencies.map((currency) => (
+                            <span key={currency} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                              {currency}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-500 sm:min-w-[320px]">
+                        <div className="rounded-2xl bg-slate-50 p-3">
+                          <div className="text-base font-semibold text-slate-950">{group.activeCount}</div>
+                          <div>active rows</div>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 p-3">
+                          <div className="text-base font-semibold text-slate-950">{group.publicCount}</div>
+                          <div>public</div>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 p-3">
+                          <div className="text-base font-semibold text-slate-950">{group.signedInCount}</div>
+                          <div>signed-in</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 overflow-x-auto">
+                      <Table className="min-w-[880px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Audience</TableHead>
+                            <TableHead>Currency pair</TableHead>
+                            <TableHead>Buy</TableHead>
+                            <TableHead>Sell</TableHead>
+                            <TableHead>Mid</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.rows.map((row) => (
+                            <TableRow key={row.id}>
+                              <TableCell>
+                                <Badge variant={row.audience === "authenticated" ? "default" : "secondary"}>
+                                  {row.audience === "authenticated" ? "signed-in" : "public"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {row.source_currency}/{row.target_currency}
+                              </TableCell>
+                              <TableCell>{formatRate(row.buy_rate)}</TableCell>
+                              <TableCell>{formatRate(row.sell_rate)}</TableCell>
+                              <TableCell>{formatRate(row.mid_rate)}</TableCell>
+                              <TableCell>{row.status}</TableCell>
+                              <TableCell>
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
+                                    <Pencil className="h-4 w-4" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    onClick={() => {
+                                      if (window.confirm(`Delete rate for ${row.source_name} ${row.source_currency}/${row.target_currency}?`)) {
+                                        void deleteMutation.mutateAsync(row.id);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-200 p-12 text-center text-slate-500">
+                  {ratesQuery.isLoading ? "Loading provider rates..." : "No provider currency pairs are configured."}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[980px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Audience</TableHead>
+                    <TableHead>Pair</TableHead>
+                    <TableHead>Buy</TableHead>
+                    <TableHead>Sell</TableHead>
+                    <TableHead>Mid</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.length > 0 ? (
+                    rows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <div className="font-medium text-slate-900">{row.source_name}</div>
+                          <div className="text-xs text-slate-500">{row.source_code}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{row.rate_type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={row.audience === "authenticated" ? "default" : "secondary"}>
+                            {row.audience === "authenticated" ? "signed-in" : "public"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {row.source_currency}/{row.target_currency}
+                        </TableCell>
+                        <TableCell>{formatRate(row.buy_rate)}</TableCell>
+                        <TableCell>{formatRate(row.sell_rate)}</TableCell>
+                        <TableCell>{formatRate(row.mid_rate)}</TableCell>
+                        <TableCell>{row.status}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => openEditDialog(row)}>
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() => {
+                                if (window.confirm(`Delete rate for ${row.source_name}?`)) {
+                                  void deleteMutation.mutateAsync(row.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={9} className="py-12 text-center text-slate-500">
+                        {ratesQuery.isLoading ? "Loading customer display rates..." : "No customer display rates are configured."}
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-12 text-center text-slate-500">
-                      {ratesQuery.isLoading ? "Loading exchange rates..." : "No exchange rates are configured."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && setDialogMode(null)}>
         <DialogContent className="max-h-[92vh] overflow-y-auto rounded-[28px] border-slate-200 bg-white text-slate-950 sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{dialogMode === "create" ? "Add exchange rate" : "Edit exchange rate"}</DialogTitle>
+            <DialogTitle>
+              {dialogMode === "create"
+                ? isProviderMode
+                  ? "Add provider currency pair"
+                  : "Add customer display rate"
+                : "Edit exchange rate"}
+            </DialogTitle>
             <DialogDescription>
-              Provider rates override provider quotes. Bank rates appear in the mobile Overview screen.
+              {isProviderMode
+                ? "Create one configured rate row for each currency pair supported by a provider."
+                : "These rates are published to customer-facing mobile screens and quote previews."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Rate type</Label>
-              <Select
-                value={formState.rate_type}
-                onValueChange={(value: "provider" | "bank") => setFormState((current) => ({ ...current, rate_type: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="provider">Provider</SelectItem>
-                  <SelectItem value="bank">Vietnam bank</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {!isProviderMode && (
+              <div className="grid gap-2">
+                <Label>Rate type</Label>
+                <Select
+                  value={formState.rate_type}
+                  onValueChange={(value: "provider" | "bank") => setFormState((current) => ({ ...current, rate_type: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="provider">Provider override</SelectItem>
+                    <SelectItem value="bank">Vietnam bank</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid gap-2">
               <Label>Audience</Label>
@@ -378,7 +572,7 @@ const AdminExchangeRates = () => {
               <Input
                 value={formState.source_code}
                 onChange={(event) => setFormState((current) => ({ ...current, source_code: event.target.value }))}
-                placeholder={formState.rate_type === "provider" ? "wise" : "vcb"}
+                placeholder={isProviderMode || formState.rate_type === "provider" ? "wise" : "vcb"}
               />
             </div>
 
@@ -387,7 +581,7 @@ const AdminExchangeRates = () => {
               <Input
                 value={formState.source_name}
                 onChange={(event) => setFormState((current) => ({ ...current, source_name: event.target.value }))}
-                placeholder={formState.rate_type === "provider" ? "Wise" : "Vietcombank"}
+                placeholder={isProviderMode || formState.rate_type === "provider" ? "Wise" : "Vietcombank"}
               />
             </div>
 
