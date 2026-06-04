@@ -12,6 +12,7 @@ import AdminNotFound from "@/pages/admin/AdminNotFound";
 import AdminContactSubmissions from "@/pages/admin/AdminContactSubmissions";
 import AdminProviders from "@/pages/admin/AdminProviders";
 import AdminExchangeRates from "@/pages/admin/AdminExchangeRates";
+import AdminFxOrders from "@/pages/admin/AdminFxOrders";
 import AdminKycReviews from "@/pages/admin/AdminKycReviews";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminTransactions from "@/pages/admin/AdminTransactions";
@@ -38,6 +39,7 @@ const App = () => {
                   <Route path="kyc-reviews" element={<AdminKycReviews />} />
                   <Route path="exchange-rates" element={<AdminExchangeRates mode="provider" />} />
                   <Route path="customer-rates" element={<AdminExchangeRates mode="customer" />} />
+                  <Route path="fx-orders" element={<AdminFxOrders />} />
                   <Route path="transactions" element={<AdminTransactions />} />
                   <Route path="contact-submissions" element={<AdminContactSubmissions />} />
                   <Route path="settings" element={<AdminSettings />} />

@@ -271,6 +271,50 @@ export interface AdminTransaction {
   created_at?: string | null;
 }
 
+type SnapshotValue = string | number | boolean | null | undefined;
+
+export interface AdminFxOrderCustomerSnapshot {
+  user?: {
+    id?: number;
+    full_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    status?: string | null;
+    kyc_status?: string | null;
+  } | null;
+  profile?: Record<string, SnapshotValue> | null;
+  kyc_profile?: Record<string, SnapshotValue> | null;
+  provider?: Record<string, SnapshotValue> | null;
+}
+
+export interface AdminFxOrder {
+  id: number;
+  order_no: string;
+  user_id: number;
+  provider_id: number;
+  user?: AdminUser | null;
+  provider?: ProviderSummary | null;
+  source_currency: string;
+  target_currency: string;
+  source_amount: string | number;
+  target_amount?: string | number | null;
+  fx_rate?: string | number | null;
+  fee_amount?: string | number | null;
+  fee_currency?: string | null;
+  status: "pending" | "confirmed" | "rejected" | "cancelled" | string;
+  customer_snapshot?: AdminFxOrderCustomerSnapshot | null;
+  raw_data?: Record<string, unknown> | null;
+  admin_note?: string | null;
+  confirmed_at?: string | null;
+  cancelled_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminFxOrderResponse {
+  message?: string;
+  order: AdminFxOrder;
+}
 
 export interface ContactSubmission {
   id: number;
