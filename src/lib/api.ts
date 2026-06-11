@@ -47,10 +47,17 @@ export const adminAuthEndpointConfig = {
 export const adminEndpointConfig = {
   users: import.meta.env.VITE_ADMIN_USERS_PATH || "/admin/users",
   providers: import.meta.env.VITE_ADMIN_PROVIDERS_PATH || "/admin/integration-providers",
+  providerHealth: import.meta.env.VITE_ADMIN_PROVIDER_HEALTH_PATH || "/admin/provider-health",
+  providerWebhookEvents:
+    import.meta.env.VITE_ADMIN_PROVIDER_WEBHOOK_EVENTS_PATH || "/admin/provider-webhook-events",
   exchangeRates: import.meta.env.VITE_ADMIN_EXCHANGE_RATES_PATH || "/admin/exchange-rates",
   kycProfiles: import.meta.env.VITE_ADMIN_KYC_PROFILES_PATH || "/admin/kyc-profiles",
   transactions: import.meta.env.VITE_ADMIN_TRANSACTIONS_PATH || "/admin/transactions",
+  transfers: import.meta.env.VITE_ADMIN_TRANSFERS_PATH || "/admin/transfers",
   fxOrders: import.meta.env.VITE_ADMIN_FX_ORDERS_PATH || "/admin/fx-orders",
+  wallets: import.meta.env.VITE_ADMIN_WALLETS_PATH || "/admin/wallets",
+  ledgerEntries: import.meta.env.VITE_ADMIN_LEDGER_ENTRIES_PATH || "/admin/ledger-entries",
+  auditLogs: import.meta.env.VITE_ADMIN_AUDIT_LOGS_PATH || "/admin/audit-logs",
   contactSubmissions: import.meta.env.VITE_ADMIN_CONTACT_SUBMISSIONS_PATH || "/admin/contact-submissions",
 };
 

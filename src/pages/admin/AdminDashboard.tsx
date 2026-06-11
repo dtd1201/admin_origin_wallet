@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
 import type {
   AdminIntegrationLinkUpsertResponse,
-  AdminTransaction,
+  AdminTransfer,
   AdminUser,
   AdminUserIntegrationLinksResponse,
   ProviderSummary,
@@ -87,16 +87,16 @@ const AdminDashboard = () => {
       requestApi<PaginatedResponse<ProviderSummary>>(adminEndpointConfig.providers, { method: "GET", token }),
   });
 
-  const transactionsQuery = useQuery({
-    queryKey: ["admin", "transactions", token],
+  const transfersQuery = useQuery({
+    queryKey: ["admin", "transfers", "dashboard", token],
     enabled: !!token,
     queryFn: async () =>
-      requestApi<PaginatedResponse<AdminTransaction>>(adminEndpointConfig.transactions, { method: "GET", token }),
+      requestApi<PaginatedResponse<AdminTransfer>>(adminEndpointConfig.transfers, { method: "GET", token }),
   });
 
   const usersPage = usersQuery.data;
   const providersPage = providersQuery.data;
-  const transactionsPage = transactionsQuery.data;
+  const transfersPage = transfersQuery.data;
   const userRows = usersPage?.data ?? [];
   const activeProviders = providersPage?.data.filter((provider) => provider.status === "active") ?? [];
   const integrationRequestQueries = useQueries({
@@ -239,9 +239,9 @@ const AdminDashboard = () => {
       icon: Building2,
     },
     {
-      title: "Transactions",
-      value: transactionsPage?.total ?? 0,
-      description: "Transfer and payment activity available for review and follow-up.",
+      title: "Transfers",
+      value: transfersPage?.total ?? 0,
+      description: "Payout activity available for approval, sync, and follow-up.",
       icon: ArrowRightLeft,
     },
     {
@@ -253,7 +253,7 @@ const AdminDashboard = () => {
   ];
 
   const recentUsers = userRows.slice(0, 4);
-  const recentTransactions = transactionsPage?.data.slice(0, 4) ?? [];
+  const recentTransfers = transfersPage?.data.slice(0, 4) ?? [];
   const isReviewLoading = selectedRequest !== null && selectedUserIntegrationLinksQuery.isLoading;
 
   const handleSelectRequest = (request: PendingRequestSummary) => {
@@ -280,7 +280,7 @@ const AdminDashboard = () => {
             </Badge>
             <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Operations overview</h2>
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-300">
-              A quick snapshot of user activity, providers, and transactions across the admin workspace.
+              A quick snapshot of user activity, providers, and transfers across the admin workspace.
             </p>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -405,16 +405,16 @@ const AdminDashboard = () => {
 
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader>
-              <CardTitle>Recent transactions</CardTitle>
+              <CardTitle>Recent transfers</CardTitle>
               <CardDescription>The latest activity currently visible to your admin team.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentTransactions.length ? (
-                recentTransactions.map((entry) => (
+              {recentTransfers.length ? (
+                recentTransfers.map((entry) => (
                   <div key={entry.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-slate-950">{entry.transfer_no || `Transaction #${entry.id}`}</div>
+                        <div className="font-semibold text-slate-950">{entry.transfer_no || `Transfer #${entry.id}`}</div>
                         <div className="text-sm text-slate-500">User #{entry.user_id}</div>
                       </div>
                       <Badge variant="secondary">{entry.status}</Badge>
@@ -426,7 +426,7 @@ const AdminDashboard = () => {
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-sm leading-6 text-slate-500">
-                  {transactionsQuery.isLoading ? "Loading transactions..." : "No transactions are available right now."}
+                  {transfersQuery.isLoading ? "Loading transfers..." : "No transfers are available right now."}
                 </div>
               )}
             </CardContent>
@@ -522,5 +522,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-
-

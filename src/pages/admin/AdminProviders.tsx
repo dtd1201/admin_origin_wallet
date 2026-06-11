@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Link2, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Building2, ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
@@ -29,13 +29,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type ProviderFormState = {
   code: string;
   name: string;
+  logo_url: string;
   status: "active" | "inactive";
 };
 
 const emptyForm: ProviderFormState = {
   code: "",
   name: "",
+  logo_url: "",
   status: "active",
+};
+
+const normalizeProviderCode = (value: string) => value.trim().toLowerCase();
+
+const isValidOptionalUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 };
 
 const AdminProviders = () => {
@@ -97,7 +115,7 @@ const AdminProviders = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ providerCode, payload }: { providerCode: string; payload: Omit<ProviderFormState, "code"> }) =>
+    mutationFn: async ({ providerCode, payload }: { providerCode: string; payload: ProviderFormState }) =>
       requestApi<ProviderSummary>(`${adminEndpointConfig.providers}/${encodeURIComponent(providerCode)}`, {
         method: "PUT",
         token,
@@ -144,6 +162,7 @@ const AdminProviders = () => {
     setFormState({
       code: provider.code,
       name: provider.name,
+      logo_url: provider.logo_url ?? "",
       status: provider.status === "inactive" ? "inactive" : "active",
     });
     setFormError("");
@@ -152,27 +171,40 @@ const AdminProviders = () => {
   const handleSubmit = async () => {
     setFormError("");
 
-    if (!formState.code.trim() || !formState.name.trim()) {
+    const providerCode = normalizeProviderCode(formState.code);
+    const logoUrl = formState.logo_url.trim();
+
+    if (!providerCode || !formState.name.trim()) {
       setFormError("Code and name are required.");
       return;
     }
 
+    if (!/^[a-z0-9_-]+$/.test(providerCode)) {
+      setFormError("Code can only contain letters, numbers, underscore, or hyphen.");
+      return;
+    }
+
+    if (!isValidOptionalUrl(logoUrl)) {
+      setFormError("Logo URL must start with http:// or https://.");
+      return;
+    }
+
+    const payload = {
+      code: providerCode,
+      name: formState.name.trim(),
+      logo_url: logoUrl,
+      status: formState.status,
+    };
+
     if (dialogMode === "create") {
-      await createMutation.mutateAsync({
-        code: formState.code.trim().toUpperCase(),
-        name: formState.name.trim(),
-        status: formState.status,
-      });
+      await createMutation.mutateAsync(payload);
       return;
     }
 
     if (dialogMode === "edit" && selectedProvider) {
       await updateMutation.mutateAsync({
         providerCode: selectedProvider.code,
-        payload: {
-          name: formState.name.trim(),
-          status: formState.status,
-        },
+        payload,
       });
     }
   };
@@ -223,9 +255,14 @@ const AdminProviders = () => {
                     <div key={row.code} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-slate-900">{row.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            #{row.id} • <span className="break-all">{row.code}</span>
+                          <div className="flex items-center gap-3">
+                            <ProviderLogoPreview provider={row} />
+                            <div className="min-w-0">
+                              <div className="font-medium text-slate-900">{row.name}</div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                #{row.id} - <span className="break-all">{row.code}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                         <Badge variant={row.status === "active" ? "default" : "secondary"}>{row.status}</Badge>
@@ -294,8 +331,13 @@ const AdminProviders = () => {
                       return (
                         <TableRow key={row.code}>
                           <TableCell>
-                            <div className="font-medium text-slate-900">{row.name}</div>
-                            <div className="text-xs text-slate-500">#{row.id}</div>
+                            <div className="flex items-center gap-3">
+                              <ProviderLogoPreview provider={row} />
+                              <div>
+                                <div className="font-medium text-slate-900">{row.name}</div>
+                                <div className="text-xs text-slate-500">#{row.id}</div>
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>{row.code}</TableCell>
                           <TableCell>
@@ -376,7 +418,7 @@ const AdminProviders = () => {
             <DialogDescription>
               {dialogMode === "create"
                 ? "Create a new integration provider for the admin workspace."
-                : "Update the provider name or current availability."}
+                : "Update the provider code, logo, name, or current availability."}
             </DialogDescription>
           </DialogHeader>
 
@@ -386,10 +428,10 @@ const AdminProviders = () => {
               <Input
                 id="provider-code"
                 value={formState.code}
-                disabled={dialogMode === "edit"}
-                onChange={(event) => setFormState((current) => ({ ...current, code: event.target.value }))}
-                placeholder="AIRWALLEX"
+                onChange={(event) => setFormState((current) => ({ ...current, code: event.target.value.toLowerCase() }))}
+                placeholder="airwallex"
               />
+              <p className="text-xs text-slate-500">Use one stable lowercase code, for example lianlian.</p>
             </div>
 
             <div className="grid gap-2">
@@ -400,6 +442,20 @@ const AdminProviders = () => {
                 onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))}
                 placeholder="Airwallex"
               />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="provider-logo-url">Logo URL</Label>
+              <div className="flex items-center gap-3">
+                <ProviderLogoPreview provider={formState} />
+                <Input
+                  id="provider-logo-url"
+                  type="url"
+                  value={formState.logo_url}
+                  onChange={(event) => setFormState((current) => ({ ...current, logo_url: event.target.value }))}
+                  placeholder="https://provider.example.com/logo.png"
+                />
+              </div>
             </div>
 
             <div className="grid gap-2">
@@ -433,6 +489,22 @@ const AdminProviders = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+const ProviderLogoPreview = ({ provider }: { provider: Pick<ProviderSummary, "code" | "name" | "logo_url"> }) => {
+  const fallback = (provider.name || provider.code || "P").slice(0, 1).toUpperCase();
+
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700">
+      {provider.logo_url ? (
+        <img src={provider.logo_url} alt={provider.name || provider.code} className="h-full w-full object-contain p-1.5" />
+      ) : provider.name || provider.code ? (
+        fallback
+      ) : (
+        <ImageIcon className="h-5 w-5" />
+      )}
     </div>
   );
 };

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  Activity,
   ArrowRightLeft,
   Building2,
   ChevronDown,
   CircleDollarSign,
   ClipboardList,
   Eye,
+  FileClock,
   Inbox,
   LayoutDashboard,
   LogOut,
@@ -14,6 +16,7 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,11 +34,14 @@ const navItems = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/providers", label: "Providers", icon: Building2 },
+  { to: "/admin/provider-operations", label: "Provider ops", icon: Activity },
   { to: "/admin/kyc-reviews", label: "KYC/KYB", icon: ShieldCheck },
   { to: "/admin/exchange-rates", label: "Provider rates", icon: CircleDollarSign },
   { to: "/admin/customer-rates", label: "Customer display", icon: Eye },
   { to: "/admin/fx-orders", label: "FX Orders", icon: ClipboardList },
-  { to: "/admin/transactions", label: "Transactions", icon: ArrowRightLeft },
+  { to: "/admin/transactions", label: "Transfers", icon: ArrowRightLeft },
+  { to: "/admin/ledger", label: "Ledger", icon: Wallet },
+  { to: "/admin/audit-logs", label: "Audit trail", icon: FileClock },
   { to: "/admin/contact-submissions", label: "Contacts", icon: Inbox },
   { to: "/admin/settings", label: "Session", icon: Settings },
 ];

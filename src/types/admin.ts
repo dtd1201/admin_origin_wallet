@@ -21,6 +21,7 @@ export interface ProviderSummary {
   id: number;
   code: string;
   name: string;
+  logo_url?: string | null;
   status: string;
   is_available_for_onboarding?: boolean;
   supports_beneficiaries?: boolean;
@@ -28,6 +29,38 @@ export interface ProviderSummary {
   supports_quotes?: boolean;
   supports_transfers?: boolean;
   supports_webhooks?: boolean;
+}
+
+export interface AdminProviderHealth {
+  id?: number;
+  provider_id?: number;
+  provider_code: string;
+  provider?: ProviderSummary | null;
+  status: "operational" | "degraded" | "down" | "maintenance" | string;
+  environment?: "sandbox" | "production" | string | null;
+  last_checked_at?: string | null;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  latency_ms?: number | string | null;
+  error_message?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface AdminProviderWebhookEvent {
+  id: number;
+  provider_id?: number | null;
+  provider_code: string;
+  provider?: ProviderSummary | null;
+  event_id?: string | null;
+  event_type: string;
+  status: "received" | "processed" | "failed" | "ignored" | "retrying" | string;
+  related_reference?: string | null;
+  attempts?: number | null;
+  received_at?: string | null;
+  processed_at?: string | null;
+  next_retry_at?: string | null;
+  error_message?: string | null;
+  payload?: Record<string, unknown> | null;
 }
 
 export interface ManagedExchangeRate {
@@ -268,6 +301,97 @@ export interface AdminTransaction {
   status: string;
   submitted_at?: string | null;
   completed_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface AdminTransferApproval {
+  id: number;
+  transfer_id: number;
+  approver_user_id?: number | null;
+  action: "approved" | "rejected" | string;
+  note?: string | null;
+  created_at?: string | null;
+  approver?: AdminUser | null;
+}
+
+export interface AdminTransfer {
+  id: number;
+  transfer_no: string;
+  user_id: number;
+  provider_id: number;
+  user?: AdminUser | null;
+  provider?: ProviderSummary | null;
+  beneficiary_id?: number | null;
+  external_transfer_id?: string | null;
+  external_payment_id?: string | null;
+  transfer_type: string;
+  source_currency: string;
+  target_currency: string;
+  source_amount: string | number;
+  target_amount?: string | number | null;
+  fee_amount?: string | number | null;
+  status: string;
+  failure_code?: string | null;
+  failure_reason?: string | null;
+  submitted_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  approvals?: AdminTransferApproval[];
+}
+
+export interface AdminWalletAccount {
+  id: number;
+  user_id?: number | null;
+  user?: AdminUser | null;
+  provider_id?: number | null;
+  provider?: ProviderSummary | null;
+  provider_code?: string | null;
+  account_reference?: string | null;
+  currency: string;
+  available_balance: string | number;
+  ledger_balance?: string | number | null;
+  hold_balance?: string | number | null;
+  status: "active" | "frozen" | "closed" | "pending" | string;
+  last_reconciled_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminLedgerEntry {
+  id: number;
+  wallet_id?: number | null;
+  wallet?: AdminWalletAccount | null;
+  user_id?: number | null;
+  user?: AdminUser | null;
+  provider_id?: number | null;
+  provider?: ProviderSummary | null;
+  reference: string;
+  entry_type: "credit" | "debit" | "hold" | "release" | "adjustment" | "reversal" | string;
+  status: "pending" | "posted" | "reversed" | "failed" | string;
+  currency: string;
+  amount: string | number;
+  balance_after?: string | number | null;
+  source_type?: string | null;
+  source_id?: number | string | null;
+  description?: string | null;
+  posted_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface AdminAuditLog {
+  id: number;
+  actor_id?: number | null;
+  actor?: AdminUser | null;
+  actor_email?: string | null;
+  action: string;
+  entity_type: string;
+  entity_id?: number | string | null;
+  summary?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   created_at?: string | null;
 }
 

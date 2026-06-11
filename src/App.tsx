@@ -6,14 +6,17 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AdminLayout from "@/components/admin/AdminLayout";
+import AdminAuditLogs from "@/pages/admin/AdminAuditLogs";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminNotFound from "@/pages/admin/AdminNotFound";
 import AdminContactSubmissions from "@/pages/admin/AdminContactSubmissions";
 import AdminProviders from "@/pages/admin/AdminProviders";
+import AdminProviderOperations from "@/pages/admin/AdminProviderOperations";
 import AdminExchangeRates from "@/pages/admin/AdminExchangeRates";
 import AdminFxOrders from "@/pages/admin/AdminFxOrders";
 import AdminKycReviews from "@/pages/admin/AdminKycReviews";
+import AdminLedger from "@/pages/admin/AdminLedger";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminTransactions from "@/pages/admin/AdminTransactions";
 import AdminUsers from "@/pages/admin/AdminUsers";
@@ -36,11 +39,14 @@ const App = () => {
                   <Route index element={<AdminDashboard />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="providers" element={<AdminProviders />} />
+                  <Route path="provider-operations" element={<AdminProviderOperations />} />
                   <Route path="kyc-reviews" element={<AdminKycReviews />} />
                   <Route path="exchange-rates" element={<AdminExchangeRates mode="provider" />} />
                   <Route path="customer-rates" element={<AdminExchangeRates mode="customer" />} />
                   <Route path="fx-orders" element={<AdminFxOrders />} />
                   <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="ledger" element={<AdminLedger />} />
+                  <Route path="audit-logs" element={<AdminAuditLogs />} />
                   <Route path="contact-submissions" element={<AdminContactSubmissions />} />
                   <Route path="settings" element={<AdminSettings />} />
                 </Route>
