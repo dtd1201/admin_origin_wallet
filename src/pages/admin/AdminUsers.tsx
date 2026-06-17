@@ -1,10 +1,12 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mail, Pencil, Plus, Search, Trash2, UserCircle2 } from "lucide-react";
+import { Mail, Pencil, Plus, Search, ShieldCheck, Trash2, UserCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
 import type {
   AdminRoleRecord,
+  AdminKycProfile,
   AdminUser,
   AdminUserDetail,
   AdminUserIntegrationLinkSlot,
@@ -109,6 +111,45 @@ const buildIntegrationLinksPayload = (links: IntegrationLinkForm[]) => {
     .filter((link) => link.enabled && link.link_url);
 };
 
+const reviewableKycStatuses = new Set(["submitted", "under_review", "needs_more_info"]);
+
+const formatAdminStatus = (status?: string | null) => String(status || "pending").replace(/_/g, " ");
+
+const getEffectiveKycStatus = (user: AdminUser, kycProfile?: AdminKycProfile | null) =>
+  kycProfile?.status || user.kyc_profile?.status || user.kyc_status || "pending";
+
+const getEffectiveKycProfile = (user: AdminUser, profilesByUserId: Record<number, AdminKycProfile>) =>
+  user.kyc_profile ?? profilesByUserId[user.id] ?? null;
+
+const getKycProfileType = (user: AdminUser, kycProfile?: AdminKycProfile | null) => {
+  const profile = kycProfile ?? user.kyc_profile;
+
+  if (profile) {
+    return profile.applicant_type === "business" ? "Business KYB" : "Individual KYC";
+  }
+
+  return user.profile?.user_type || "No KYC profile";
+};
+
+const getKycProfileDetail = (user: AdminUser, kycProfile?: AdminKycProfile | null) => {
+  const profile = kycProfile ?? user.kyc_profile;
+
+  if (profile) {
+    const profileName =
+      profile.applicant_type === "business"
+        ? profile.business_name || profile.legal_name
+        : profile.legal_name;
+    const countryCode =
+      profile.applicant_type === "business"
+        ? profile.registered_country_code || profile.country_code
+        : profile.residence_country_code || profile.nationality_country_code || profile.country_code;
+
+    return [profileName, countryCode].filter(Boolean).join(" - ") || "-";
+  }
+
+  return user.profile?.country_code || "-";
+};
+
 const AdminUsers = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -123,6 +164,12 @@ const AdminUsers = () => {
     queryKey: ["admin", "users", token],
     enabled: !!token,
     queryFn: async () => requestApi<PaginatedResponse<AdminUser>>(adminEndpointConfig.users, { method: "GET", token }),
+  });
+
+  const kycProfilesQuery = useQuery({
+    queryKey: ["admin", "kyc-profiles", "users-summary", token],
+    enabled: !!token,
+    queryFn: async () => requestApi<PaginatedResponse<AdminKycProfile>>(adminEndpointConfig.kycProfiles, { method: "GET", token }),
   });
 
   const providersQuery = useQuery({
@@ -148,6 +195,19 @@ const AdminUsers = () => {
   });
 
   const rows = useMemo(() => usersQuery.data?.data ?? [], [usersQuery.data?.data]);
+  const kycProfiles = useMemo(() => kycProfilesQuery.data?.data ?? [], [kycProfilesQuery.data?.data]);
+  const kycProfilesByUserId = useMemo(
+    () =>
+      kycProfiles.reduce<Record<number, AdminKycProfile>>((accumulator, profile) => {
+        accumulator[profile.user_id] = profile;
+        return accumulator;
+      }, {}),
+    [kycProfiles],
+  );
+  const reviewableKycProfiles = useMemo(
+    () => kycProfiles.filter((profile) => reviewableKycStatuses.has(String(profile.status).toLowerCase())),
+    [kycProfiles],
+  );
   const activeProviders = useMemo(
     () => (providersQuery.data?.data ?? []).filter((provider) => provider.status === "active"),
     [providersQuery.data?.data],
@@ -220,7 +280,19 @@ const AdminUsers = () => {
   const filteredRows = !query
     ? rows
     : rows.filter((row) => {
-        const haystack = [row.full_name, row.email, row.status, row.kyc_status, row.phone, row.profile?.user_type]
+        const kycProfile = getEffectiveKycProfile(row, kycProfilesByUserId);
+        const haystack = [
+          row.full_name,
+          row.email,
+          row.status,
+          row.kyc_status,
+          row.phone,
+          row.profile?.user_type,
+          kycProfile?.status,
+          kycProfile?.applicant_type,
+          kycProfile?.legal_name,
+          kycProfile?.business_name,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -360,9 +432,10 @@ const AdminUsers = () => {
     () => [
       { label: "Total users", value: usersQuery.data?.total ?? 0 },
       { label: "Active", value: rows.filter((row) => row.status === "active").length },
-      { label: "Pending KYC", value: rows.filter((row) => row.kyc_status === "pending").length },
+      { label: "Pending KYC", value: rows.filter((row) => ["pending", "submitted", "under_review"].includes(getEffectiveKycStatus(row, getEffectiveKycProfile(row, kycProfilesByUserId)))).length },
+      { label: "Submitted KYC/KYB", value: reviewableKycProfiles.length },
     ],
-    [rows, usersQuery.data?.total],
+    [kycProfilesByUserId, reviewableKycProfiles.length, rows, usersQuery.data?.total],
   );
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -395,7 +468,7 @@ const AdminUsers = () => {
         <CardContent>
           {deleteError && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{deleteError}</div>}
 
-          <div className="mb-4 grid gap-4 md:grid-cols-3">
+          <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {stats.map((item) => (
               <div key={item.label} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{item.label}</div>
@@ -404,11 +477,33 @@ const AdminUsers = () => {
             ))}
           </div>
 
+          {reviewableKycProfiles.length > 0 ? (
+            <div className="mb-5 flex flex-col gap-3 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-semibold">
+                    {reviewableKycProfiles.length} KYC/KYB profile{reviewableKycProfiles.length > 1 ? "s" : ""} waiting for review
+                  </div>
+                  <div className="mt-1 text-sm text-emerald-800">
+                    Customer submissions are ready in the KYC/KYB review workspace.
+                  </div>
+                </div>
+              </div>
+              <Button asChild className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700">
+                <Link to="/admin/kyc">Review KYC/KYB</Link>
+              </Button>
+            </div>
+          ) : null}
+
           <div className="space-y-4 lg:hidden">
             {filteredRows.length > 0 ? (
               filteredRows.map((row) => {
                 const pendingRequests = pendingRequestMap[row.id] ?? { count: 0, providers: [] };
                 const hasPendingRequests = pendingRequests.count > 0;
+                const kycProfile = getEffectiveKycProfile(row, kycProfilesByUserId);
 
                 return (
                   <div key={row.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -421,7 +516,10 @@ const AdminUsers = () => {
                         <div className="text-xs text-slate-500">#{row.id}</div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Badge variant="secondary">{row.status}</Badge>
-                          <Badge variant="outline">KYC {row.kyc_status}</Badge>
+                          <Badge variant="outline">KYC {formatAdminStatus(getEffectiveKycStatus(row, kycProfile))}</Badge>
+                          {kycProfile && reviewableKycStatuses.has(String(kycProfile.status).toLowerCase()) && (
+                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Submitted for review</Badge>
+                          )}
                           {hasPendingRequests && (
                             <Badge className="bg-amber-500 text-white hover:bg-amber-500">
                               {pendingRequests.count} pending request{pendingRequests.count > 1 ? "s" : ""}
@@ -438,8 +536,11 @@ const AdminUsers = () => {
                       </div>
                       <div>{row.phone || "No phone"}</div>
                       <div>
-                        {row.profile?.user_type || "No profile"} - {row.profile?.country_code || "-"}
+                        {getKycProfileType(row, kycProfile)} - {getKycProfileDetail(row, kycProfile)}
                       </div>
+                      {kycProfile?.submitted_at ? (
+                        <div className="text-xs text-emerald-700">Submitted {new Date(kycProfile.submitted_at).toLocaleString()}</div>
+                      ) : null}
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -502,6 +603,7 @@ const AdminUsers = () => {
                   filteredRows.map((row) => {
                     const pendingRequests = pendingRequestMap[row.id] ?? { count: 0, providers: [] };
                     const hasPendingRequests = pendingRequests.count > 0;
+                    const kycProfile = getEffectiveKycProfile(row, kycProfilesByUserId);
 
                     return (
                       <TableRow key={row.id}>
@@ -545,13 +647,21 @@ const AdminUsers = () => {
                           <div className="mt-1 text-sm text-slate-500">{row.phone || "No phone"}</div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium text-slate-900">{row.profile?.user_type || "No profile"}</div>
-                          <div className="text-sm text-slate-500">{row.profile?.country_code || "-"}</div>
+                          <div className="font-medium text-slate-900">{getKycProfileType(row, kycProfile)}</div>
+                          <div className="text-sm text-slate-500">{getKycProfileDetail(row, kycProfile)}</div>
+                          {kycProfile?.submitted_at ? (
+                            <div className="mt-1 text-xs text-emerald-700">Submitted {new Date(kycProfile.submitted_at).toLocaleString()}</div>
+                          ) : null}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-2">
                             <Badge variant="secondary">{row.status}</Badge>
-                            <Badge variant="outline">KYC {row.kyc_status}</Badge>
+                            <Badge variant="outline">KYC {formatAdminStatus(getEffectiveKycStatus(row, kycProfile))}</Badge>
+                            {kycProfile && reviewableKycStatuses.has(String(kycProfile.status).toLowerCase()) && (
+                              <Badge className="w-fit bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                                Submitted for review
+                              </Badge>
+                            )}
                             {hasPendingRequests && (
                               <Badge className="w-fit bg-amber-100 text-amber-900 hover:bg-amber-100">Integration request pending</Badge>
                             )}
@@ -817,4 +927,3 @@ const AdminUsers = () => {
 };
 
 export default AdminUsers;
-

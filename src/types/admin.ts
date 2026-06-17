@@ -136,6 +136,7 @@ export interface AdminUser {
   status: string;
   kyc_status: string;
   profile: AdminProfileRecord | null;
+  kyc_profile?: AdminKycProfile | null;
   roles: Array<string | AdminRoleRecord>;
   integration_links?: AdminIntegrationLink[];
   available_providers?: ProviderSummary[];
@@ -199,6 +200,7 @@ export interface AdminKycRequirement {
   subject_id?: number | null;
   review_note?: string | null;
   rejection_reason?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface AdminAmlMatch {
@@ -249,6 +251,7 @@ export interface AdminKycProfile {
   reviewed_by?: AdminUser | null;
   review_note?: string | null;
   rejection_reason?: string | null;
+  metadata?: Record<string, unknown> | null;
   documents?: AdminKycDocument[];
   related_persons?: AdminKycRelatedPerson[];
   requirements?: AdminKycRequirement[];

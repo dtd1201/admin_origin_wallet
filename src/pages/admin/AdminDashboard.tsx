@@ -43,6 +43,10 @@ const formatRequestDate = (value?: string | null) => {
   }).format(parsed);
 };
 
+const formatAdminStatus = (status?: string | null) => String(status || "pending").replace(/_/g, " ");
+
+const getEffectiveKycStatus = (user: AdminUser) => user.kyc_profile?.status || user.kyc_status || "pending";
+
 type PendingRequestSummary = {
   id: number | string;
   requestId: number | null;
@@ -311,7 +315,7 @@ const AdminDashboard = () => {
                     <div className="mt-1 break-all text-sm text-slate-600">{entry.email}</div>
                     <div className="mt-3 flex gap-2">
                       <Badge variant="secondary">{entry.status}</Badge>
-                      <Badge variant="outline">KYC {entry.kyc_status}</Badge>
+                      <Badge variant="outline">KYC {formatAdminStatus(getEffectiveKycStatus(entry))}</Badge>
                     </div>
                   </div>
                 ))
