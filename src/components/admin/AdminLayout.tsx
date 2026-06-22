@@ -85,20 +85,22 @@ const AdminLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#08131e] text-white">
-      <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <aside className="hidden border-b border-white/10 bg-[#071018] lg:block lg:border-b-0 lg:border-r">
-          <div className="flex items-center gap-3 border-b border-white/10 px-6 py-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15">
-              <img src="/logo/knt-logo.svg" alt="Origin Wallet Admin" className="h-7 w-auto brightness-0 invert" />
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-emerald-300/70">Control Center</div>
-              <div className="text-lg font-semibold">Origin Wallet Admin</div>
+    <div className="h-screen overflow-hidden bg-[#08131e] text-white">
+      <div className="grid h-screen min-h-0 lg:grid-cols-[280px_1fr]">
+        <aside className="hidden h-screen min-h-0 flex-col border-b border-white/10 bg-[#071018] lg:flex lg:border-b-0 lg:border-r">
+          <div className="shrink-0 border-b border-white/10 px-6 py-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5">
+                <img src="/logo/logo.jpg" alt="Origin Wallet Admin" className="h-10 w-10 rounded-xl object-cover" />
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-[0.28em] text-emerald-300/70">Control Center</div>
+                <div className="text-lg font-semibold">Origin Wallet Admin</div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-8 p-4">
+          <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto p-4">
             <nav className="space-y-1.5">
               {navItems.map((item) => (
                 <NavLink
@@ -132,8 +134,8 @@ const AdminLayout = () => {
           </div>
         </aside>
 
-        <main className="min-w-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_22%),linear-gradient(180deg,#08131e_0%,#0b1724_34%,#eef4f2_34%,#eef4f2_100%)]">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#08131e]/90 backdrop-blur">
+        <main className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_22%),linear-gradient(180deg,#08131e_0%,#0b1724_34%,#eef4f2_34%,#eef4f2_100%)]">
+          <header className="z-20 shrink-0 border-b border-white/10 bg-[#08131e]">
             <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-300/75">Operations</p>
@@ -236,7 +238,9 @@ const AdminLayout = () => {
             )}
           </header>
 
-          <Outlet />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

@@ -16,7 +16,7 @@ const productionHardenPlugin = (): Plugin => ({
     const protectionPrelude =
       "!function(){if(!import.meta.env||!import.meta.env.PROD)return;const e=()=>{document.documentElement.setAttribute('data-protected','true')},t=()=>{const t=window.outerWidth-window.innerWidth>160,n=window.outerHeight-window.innerHeight>160;if(t||n){e();return}document.documentElement.removeAttribute('data-protected')};window.addEventListener('contextmenu',e=>e.preventDefault()),window.addEventListener('keydown',t=>{const n=t.key.toLowerCase(),o='f12'===n||t.ctrlKey&&t.shiftKey&&['i','j','c'].includes(n)||t.ctrlKey&&['u','s'].includes(n);o&&(t.preventDefault(),t.stopPropagation())}),setInterval(t,1200),t()}();";
 
-    const result = await transform(`${protectionPrelude}${code}`, {
+    const result = await transform(`${chunk.isEntry ? protectionPrelude : ""}${code}`, {
       loader: "js",
       minify: true,
       minifyIdentifiers: true,
@@ -53,6 +53,27 @@ export default defineConfig(({ mode }) => ({
     target: "es2020",
     reportCompressedSize: false,
     chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+
+          if (id.includes("/@radix-ui/") || id.includes("/lucide-react/") || id.includes("/cmdk/") || id.includes("/vaul/")) {
+            return "ui-vendor";
+          }
+
+          if (id.includes("/@tanstack/")) {
+            return "query-vendor";
+          }
+
+          if (id.includes("/recharts/") || id.includes("/framer-motion/") || id.includes("/date-fns/")) {
+            return "feature-vendor";
+          }
+
+          return "vendor";
+        },
+      },
+    },
   },
   esbuild: mode === "production" ? { drop: ["console"], legalComments: "none" } : undefined,
   plugins: [react(), productionHardenPlugin()],

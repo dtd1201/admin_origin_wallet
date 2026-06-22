@@ -243,7 +243,7 @@ const AdminTransactions = () => {
                         </TableCell>
                         <TableCell>
                           <div className="text-slate-900">{row.user?.email || `User #${row.user_id}`}</div>
-                          <div className="text-xs text-slate-500">{row.provider?.name || `Provider #${row.provider_id}`}</div>
+                          <div className="text-xs text-slate-500">{row.provider?.name || "Nium"}</div>
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-slate-900">

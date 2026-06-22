@@ -333,7 +333,7 @@ const AdminDashboard = () => {
             <CardHeader>
               <CardTitle>Pending integration requests</CardTitle>
               <CardDescription>
-                Click a request to review it and confirm the provider connection without leaving the dashboard.
+                Click a request to review it and confirm Nium account setup without leaving the dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -443,7 +443,7 @@ const AdminDashboard = () => {
           <DialogHeader>
             <DialogTitle>Review integration request</DialogTitle>
             <DialogDescription>
-              Review the customer request and confirm the provider connection directly from the admin dashboard.
+              Review the customer request and confirm Nium setup directly from the admin dashboard.
             </DialogDescription>
           </DialogHeader>
 

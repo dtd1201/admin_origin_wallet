@@ -440,7 +440,7 @@ const AdminProviders = () => {
                 id="provider-name"
                 value={formState.name}
                 onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Airwallex"
+                placeholder="Nium"
               />
             </div>
 

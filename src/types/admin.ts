@@ -165,6 +165,7 @@ export interface AdminKycDocument {
   issuing_country_code?: string | null;
   issued_at?: string | null;
   expires_at?: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
 }

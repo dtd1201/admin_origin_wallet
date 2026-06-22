@@ -174,7 +174,7 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
     queryFn: async () => requestApi<PaginatedResponse<ManagedExchangeRate>>(queryPath, { method: "GET", token }),
   });
 
-  const rows = ratesQuery.data?.data ?? [];
+  const rows = useMemo(() => ratesQuery.data?.data ?? [], [ratesQuery.data?.data]);
   const providerGroups = useMemo(() => groupProviderRates(rows), [rows]);
   const title = isProviderMode ? "Provider exchange rates" : "Customer display rates";
   const description = isProviderMode
@@ -572,7 +572,7 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
               <Input
                 value={formState.source_code}
                 onChange={(event) => setFormState((current) => ({ ...current, source_code: event.target.value }))}
-                placeholder={isProviderMode || formState.rate_type === "provider" ? "wise" : "vcb"}
+                placeholder={isProviderMode || formState.rate_type === "provider" ? "nium" : "vcb"}
               />
             </div>
 
@@ -581,7 +581,7 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
               <Input
                 value={formState.source_name}
                 onChange={(event) => setFormState((current) => ({ ...current, source_name: event.target.value }))}
-                placeholder={isProviderMode || formState.rate_type === "provider" ? "Wise" : "Vietcombank"}
+                placeholder={isProviderMode || formState.rate_type === "provider" ? "Nium" : "Vietcombank"}
               />
             </div>
 

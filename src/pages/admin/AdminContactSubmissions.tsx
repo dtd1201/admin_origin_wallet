@@ -115,7 +115,7 @@ const AdminContactSubmissions = () => {
       await logout();
       navigate("/admin/login", { replace: true });
     })();
-  }, [detailQuery.error, logout, navigate, submissionsQuery.error]);
+  }, [deleteMutation.error, detailQuery.error, logout, navigate, submissionsQuery.error]);
 
   const submissionsPage = submissionsQuery.data;
   const rows = submissionsPage?.data ?? [];

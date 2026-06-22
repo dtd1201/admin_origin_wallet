@@ -31,9 +31,9 @@ const Footer = () => {
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="flex-shrink-0">
               <img 
-                src="/logo/knt-logo.svg" 
-                alt="KNT - Khoi Nguyen Technology" 
-                className="h-16 w-auto"
+                src="/logo/logo.jpg" 
+                alt="Origin Wallet" 
+                className="h-16 w-16 rounded-2xl object-cover"
               />
             </div>
             <div className="text-center md:text-left">

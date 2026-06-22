@@ -180,20 +180,21 @@ const AdminFxOrders = () => {
       requestApi<PaginatedResponse<ProviderSummary>>(adminEndpointConfig.providers, { method: "GET", token }),
   });
 
-  const rows = ordersQuery.data?.data ?? [];
+  const rows = useMemo(() => ordersQuery.data?.data ?? [], [ordersQuery.data?.data]);
   const providers = providersQuery.data?.data ?? [];
+  const selectedOrderId = selectedOrder?.id ?? null;
 
   useEffect(() => {
-    if (!selectedOrder) {
+    if (!selectedOrderId) {
       return;
     }
 
-    const refreshed = rows.find((row) => row.id === selectedOrder.id);
+    const refreshed = rows.find((row) => row.id === selectedOrderId);
 
     if (refreshed) {
       setSelectedOrder(refreshed);
     }
-  }, [rows, selectedOrder?.id]);
+  }, [rows, selectedOrderId]);
 
   const stats = useMemo(
     () => [
@@ -399,8 +400,8 @@ const AdminFxOrders = () => {
                                 <div className="text-xs text-slate-500">{getCustomerEmail(order)}</div>
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium text-slate-900">{order.provider?.name || `Provider #${order.provider_id}`}</div>
-                                <div className="text-xs text-slate-500">{order.provider?.code || "No provider code"}</div>
+                                <div className="font-medium text-slate-900">{order.provider?.name || "Nium"}</div>
+                                <div className="text-xs text-slate-500">{order.provider?.code || "nium"}</div>
                               </TableCell>
                               <TableCell>
                                 <div className="font-medium text-slate-900">
@@ -503,7 +504,7 @@ const AdminFxOrders = () => {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <DetailLine label="Provider" value={selectedOrder.provider?.name || `Provider #${selectedOrder.provider_id}`} />
+                  <DetailLine label="Infrastructure" value={selectedOrder.provider?.name || "Nium"} />
                   <DetailLine label="Send" value={formatAmount(selectedOrder.source_amount, selectedOrder.source_currency)} />
                   <DetailLine label="Receive" value={formatAmount(selectedOrder.target_amount, selectedOrder.target_currency)} />
                   <DetailLine label="FX rate" value={formatNumber(selectedOrder.fx_rate)} />
@@ -579,7 +580,7 @@ const AdminFxOrders = () => {
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <div className="font-semibold text-slate-950">{decisionDialog.order.order_no}</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  {getCustomerName(decisionDialog.order)} - {decisionDialog.order.provider?.name || `Provider #${decisionDialog.order.provider_id}`}
+                  {getCustomerName(decisionDialog.order)} - {decisionDialog.order.provider?.name || "Nium"}
                 </div>
                 <div className="mt-3 text-sm text-slate-700">
                   {formatAmount(decisionDialog.order.source_amount, decisionDialog.order.source_currency)} to{" "}

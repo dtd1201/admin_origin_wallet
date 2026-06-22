@@ -102,6 +102,11 @@ const getOpenRequirementCount = (profile: AdminKycProfile) =>
     ["required", "needs_more_info", "rejected"].includes(requirement.status),
   ).length ?? 0;
 
+const isAmlClearForApproval = (status?: string | null) =>
+  ["clear", "manual_clear"].includes(String(status ?? "").toLowerCase());
+
+const isActiveAmlScreening = (status?: string | null) => String(status ?? "").toLowerCase() !== "superseded";
+
 type UpdateRequestTarget = {
   key: string;
   label: string;
@@ -193,10 +198,12 @@ const AdminKycReviews = () => {
     queryFn: async () => requestApi<PaginatedResponse<AdminKycProfile>>(queryPath, { method: "GET", token }),
   });
 
-  const rows = profilesQuery.data?.data ?? [];
+  const rows = useMemo(() => profilesQuery.data?.data ?? [], [profilesQuery.data?.data]);
+  const selectedProfileId = selectedProfile?.id ?? null;
+  const selectedProfileReviewNote = selectedProfile?.review_note ?? "";
 
   useEffect(() => {
-    if (!selectedProfile) {
+    if (!selectedProfileId) {
       return;
     }
 
@@ -206,7 +213,7 @@ const AdminKycReviews = () => {
       return;
     }
 
-    const latestProfile = rows.find((row) => row.id === selectedProfile.id);
+    const latestProfile = rows.find((row) => row.id === selectedProfileId);
     if (latestProfile) {
       setSelectedProfile(latestProfile);
       return;
@@ -214,17 +221,17 @@ const AdminKycReviews = () => {
 
     setSelectedProfile(null);
     setReviewDialogOpen(false);
-  }, [rows, selectedProfile?.id]);
+  }, [rows, selectedProfileId]);
 
   useEffect(() => {
-    setReviewNote(selectedProfile?.review_note ?? "");
+    setReviewNote(selectedProfileReviewNote);
     setRejectionReason("");
     setReviewError("");
     setDocumentError("");
     setUpdateRequestTarget(null);
     setUpdateRequestReason("");
     setUpdateRequestDialogOpen(false);
-  }, [selectedProfile?.id]);
+  }, [selectedProfileId, selectedProfileReviewNote]);
 
   const stats = useMemo(
     () => [
@@ -325,6 +332,35 @@ const AdminKycReviews = () => {
     },
   });
 
+  const amlClearMutation = useMutation({
+    mutationFn: async (screening: AdminAmlScreening) =>
+      requestApi<{ message?: string; aml_screening: AdminAmlScreening }>(
+        `/admin/aml-screenings/${screening.id}/clear`,
+        {
+          method: "POST",
+          token,
+          body: { review_note: reviewNote.trim() || null },
+        },
+      ),
+    onSuccess: async (response) => {
+      setSelectedProfile((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          aml_screenings: current.aml_screenings?.map((screening) =>
+            screening.id === response.aml_screening.id ? response.aml_screening : screening,
+          ),
+        };
+      });
+      await invalidateKycProfiles();
+      setReviewError("");
+    },
+    onError: (error) => {
+      setReviewError(error instanceof Error ? error.message : "Unable to manually clear AML screening.");
+    },
+  });
+
   const requestUpdateMutation = useMutation({
     mutationFn: async ({
       profile,
@@ -371,8 +407,19 @@ const AdminKycReviews = () => {
   };
 
   const selectedOpenRequirementCount = selectedProfile ? getOpenRequirementCount(selectedProfile) : 0;
+  const selectedActiveAmlScreenings =
+    selectedProfile?.aml_screenings?.filter((screening) => isActiveAmlScreening(screening.status)) ?? [];
+  const selectedAmlMissing = Boolean(selectedProfile) && selectedActiveAmlScreenings.length === 0;
+  const selectedBlockingAmlCount = selectedActiveAmlScreenings.filter(
+    (screening) => !isAmlClearForApproval(screening.status),
+  ).length;
+  const selectedAmlApprovalBlocked = selectedAmlMissing || selectedBlockingAmlCount > 0;
   const isReviewing =
-    approveMutation.isPending || rejectMutation.isPending || amlMutation.isPending || requestUpdateMutation.isPending;
+    approveMutation.isPending ||
+    rejectMutation.isPending ||
+    amlMutation.isPending ||
+    amlClearMutation.isPending ||
+    requestUpdateMutation.isPending;
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
@@ -580,31 +627,50 @@ const AdminKycReviews = () => {
                     <Section title="Requirements">
                       <div className="space-y-2">
                         {selectedProfile.requirements?.length ? (
-                          selectedProfile.requirements.map((requirement) => (
-                            <div
-                              key={requirement.key}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 p-3 text-sm"
-                            >
-                              <div>
-                                <div className="font-medium text-slate-900">{requirement.label}</div>
-                                {requirement.rejection_reason && (
-                                  <div className="text-xs text-red-600">{requirement.rejection_reason}</div>
-                                )}
+                          selectedProfile.requirements.map((requirement) => {
+                            const resubmittedAt =
+                              typeof requirement.metadata?.resubmitted_at === "string"
+                                ? requirement.metadata.resubmitted_at
+                                : "";
+                            const resubmissionNote =
+                              typeof requirement.metadata?.resubmission_note === "string"
+                                ? requirement.metadata.resubmission_note
+                                : "";
+
+                            return (
+                              <div
+                                key={requirement.key}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 p-3 text-sm"
+                              >
+                                <div>
+                                  <div className="font-medium text-slate-900">{requirement.label}</div>
+                                  {requirement.rejection_reason && (
+                                    <div className="text-xs text-red-600">{requirement.rejection_reason}</div>
+                                  )}
+                                  {resubmittedAt && (
+                                    <div className="mt-1 text-xs font-medium text-emerald-700">
+                                      Resubmitted {formatDate(resubmittedAt)}
+                                    </div>
+                                  )}
+                                  {resubmissionNote && (
+                                    <div className="mt-1 text-xs text-slate-500">Customer note: {resubmissionNote}</div>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge className={statusClassName(requirement.status)}>{requirement.status}</Badge>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                    onClick={() => openUpdateRequestDialog(requirementUpdateTarget(requirement))}
+                                  >
+                                    Request update
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge className={statusClassName(requirement.status)}>{requirement.status}</Badge>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="rounded-full border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                                  onClick={() => openUpdateRequestDialog(requirementUpdateTarget(requirement))}
-                                >
-                                  Request update
-                                </Button>
-                              </div>
-                            </div>
-                          ))
+                            );
+                          })
                         ) : (
                           <div className="text-sm text-slate-500">No requirements recorded.</div>
                         )}
@@ -629,6 +695,11 @@ const AdminKycReviews = () => {
                                 <div className="mt-1 break-all text-xs text-slate-500">
                                   {document.original_name || document.file_path || "Stored KYC evidence"}
                                 </div>
+                                {document.metadata?.resubmission_requirement_key && (
+                                  <div className="mt-1 text-xs font-medium text-emerald-700">
+                                    Resubmitted for {formatMetadataValue(document.metadata.resubmission_requirement_key)}
+                                  </div>
+                                )}
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -700,6 +771,11 @@ const AdminKycReviews = () => {
                                         <div className="break-all text-xs text-slate-500">
                                           {document.original_name || document.file_path || "Stored related-person evidence"}
                                         </div>
+                                        {document.metadata?.resubmission_requirement_key && (
+                                          <div className="text-xs font-medium text-emerald-700">
+                                            Resubmitted for {formatMetadataValue(document.metadata.resubmission_requirement_key)}
+                                          </div>
+                                        )}
                                       </div>
                                       <Button
                                         type="button"
@@ -741,7 +817,21 @@ const AdminKycReviews = () => {
                                   <div className="font-medium text-slate-900">{screening.subject_name}</div>
                                   <div className="text-xs text-slate-500">{screening.subject_role}</div>
                                 </div>
-                                <Badge className={statusClassName(screening.status)}>{screening.status}</Badge>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge className={statusClassName(screening.status)}>{screening.status}</Badge>
+                                  {!isAmlClearForApproval(screening.status) && isActiveAmlScreening(screening.status) ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                      disabled={isReviewing}
+                                      onClick={() => void amlClearMutation.mutateAsync(screening)}
+                                    >
+                                      Manual clear
+                                    </Button>
+                                  ) : null}
+                                </div>
                               </div>
                               <div className="mt-2 grid gap-2 text-slate-600 md:grid-cols-2">
                                 <DetailItem label="Provider" value={screening.screening_provider} />
@@ -749,6 +839,11 @@ const AdminKycReviews = () => {
                                 <DetailItem label="Score" value={screening.risk_score ?? "-"} />
                                 <DetailItem label="Screened" value={formatDate(screening.screened_at)} />
                               </div>
+                              {screening.review_note ? (
+                                <div className="mt-2 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">
+                                  Review note: {screening.review_note}
+                                </div>
+                              ) : null}
                             </div>
                           ))
                         ) : (
@@ -782,7 +877,7 @@ const AdminKycReviews = () => {
                       <Button
                         type="button"
                         className="rounded-2xl bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                        disabled={isReviewing || selectedOpenRequirementCount > 0}
+                        disabled={isReviewing || selectedOpenRequirementCount > 0 || selectedAmlApprovalBlocked}
                         onClick={() => void approveMutation.mutateAsync(selectedProfile)}
                       >
                         <CheckCircle2 className="h-4 w-4" />
@@ -803,6 +898,14 @@ const AdminKycReviews = () => {
                     {selectedOpenRequirementCount > 0 && (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                         Resolve open requirements before approving this profile.
+                      </div>
+                    )}
+
+                    {selectedAmlApprovalBlocked && (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        {selectedAmlMissing
+                          ? "Run AML screening before approving this profile."
+                          : "Clear or manually clear all active AML screenings before approving this profile."}
                       </div>
                     )}
                   </div>

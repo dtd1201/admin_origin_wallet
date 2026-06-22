@@ -67,8 +67,8 @@ const AdminLogin = () => {
     <div className="flex min-h-screen bg-[linear-gradient(135deg,#071018_0%,#0f2232_48%,#d9f4ec_48%,#eff7f3_100%)]">
       <div className="hidden w-[46%] flex-col justify-between bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.32),_transparent_28%),linear-gradient(180deg,#06111a_0%,#08131e_100%)] p-10 lg:flex">
         <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/15">
-            <img src="/logo/knt-logo.svg" alt="Origin Wallet Admin" className="h-8 w-auto brightness-0 invert" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+            <img src="/logo/logo.jpg" alt="Origin Wallet Admin" className="h-11 w-11 rounded-xl object-cover" />
           </div>
           <div>
             <div className="text-xs uppercase tracking-[0.32em] text-emerald-200/70">Admin</div>
@@ -237,4 +237,3 @@ const AdminLogin = () => {
 };
 
 export default AdminLogin;
-
