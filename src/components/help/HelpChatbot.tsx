@@ -21,7 +21,7 @@ type ChatMessage = {
 };
 
 const quickPrompts = [
-  "How do I connect Nium?",
+  "How do I manage account setup?",
   "How do I add a beneficiary?",
   "Why is my account pending?",
   "How long does a transfer take?",
@@ -47,15 +47,14 @@ const buildAssistantReply = (question: string) => {
   const tokens = normalize(question);
 
   if (tokens.length === 0) {
-    return "Ask me about transfers, balances, Nium setup, profile setup, or security.";
+    return "Ask me about transfers, balances, account setup, profile setup, or security.";
   }
 
   if (
-    tokens.includes("nium") ||
     tokens.includes("infrastructure") ||
     (tokens.includes("provider") && tokens.includes("connect"))
   ) {
-    return "Origin Wallet now uses Nium as the infrastructure rail. Review KYC/KYB first, then handle Nium account setup, webhooks, balances, beneficiaries, FX, and transfers from the admin workspace.";
+    return "Review KYC/KYB first, then handle account setup, webhooks, balances, beneficiaries, FX, and transfers from the admin workspace.";
   }
 
   const bestMatch = knowledgeBase
@@ -69,7 +68,7 @@ const buildAssistantReply = (question: string) => {
     return `${bestMatch.answer} If you want, I can also help with ${bestMatch.category.toLowerCase()} next.`;
   }
 
-  return "I could not find an exact answer yet. Try asking about transfers, fees, wallet balances, Nium setup, profile, or security.";
+  return "I could not find an exact answer yet. Try asking about transfers, fees, wallet balances, account setup, profile, or security.";
 };
 
 const HelpChatbot = () => {
@@ -80,7 +79,7 @@ const HelpChatbot = () => {
       id: "welcome",
       role: "assistant",
       content:
-        "Hi, I am your Origin Wallet helper. Ask me about transfers, balances, account setup, or Nium operations.",
+        "Hi, I am your Origin Wallet helper. Ask me about transfers, balances, account setup, or wallet operations.",
     },
   ]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -134,7 +133,7 @@ const HelpChatbot = () => {
                 Help assistant
               </SheetTitle>
               <SheetDescription className="text-left text-sm text-gray-500 dark:text-gray-400">
-                Quick answers for wallet, transfers, and Nium operations.
+                Quick answers for wallet, transfers, and wallet operations.
               </SheetDescription>
             </div>
           </div>

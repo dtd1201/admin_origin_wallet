@@ -41,7 +41,7 @@ const Footer = () => {
                 CÔNG TY CỔ PHẦN CÔNG NGHỆ KHỞI NGUYÊN
               </h3>
               <p className="text-sm text-primary-foreground/60">
-                Khoi Nguyen Technology Joint Stock Company
+                Origin Wallet
               </p>
             </div>
             <div className="md:ml-auto flex gap-4">
@@ -105,7 +105,7 @@ const Footer = () => {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="text-xs text-primary-foreground/50 leading-relaxed max-w-2xl">
               <p className="mb-2">
-                A platform by <strong className="text-primary-foreground/70">KHOI NGUYEN TECHNOLOGY JSC</strong>
+                A platform by <strong className="text-primary-foreground/70">Origin Wallet</strong>
               </p>
               <p>
                 Origin Wallet is a financial technology platform. Services described on this website are for informational purposes. 
@@ -114,7 +114,7 @@ const Footer = () => {
               </p>
             </div>
             <div className="text-xs text-primary-foreground/40">
-              © {new Date().getFullYear()} KHOI NGUYEN TECHNOLOGY JSC. All rights reserved.
+              © {new Date().getFullYear()} Origin Wallet. All rights reserved.
             </div>
           </div>
         </div>

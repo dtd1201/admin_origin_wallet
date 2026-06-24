@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRightLeft, Building2, ExternalLink, Shield, Users } f
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
+import { getProviderDisplayCode, getProviderDisplayName, PUBLIC_PROVIDER_NAME } from "@/lib/providerDisplay";
 import type {
   AdminIntegrationLinkUpsertResponse,
   AdminTransfer,
@@ -46,6 +47,14 @@ const formatRequestDate = (value?: string | null) => {
 const formatAdminStatus = (status?: string | null) => String(status || "pending").replace(/_/g, " ");
 
 const getEffectiveKycStatus = (user: AdminUser) => user.kyc_profile?.status || user.kyc_status || "pending";
+
+const normalizeProviderLinkLabel = (label?: string | null, providerName = PUBLIC_PROVIDER_NAME) => {
+  if (!label?.trim()) {
+    return `Connect ${providerName}`;
+  }
+
+  return label.trim().replace(/\bnium\b/gi, providerName);
+};
 
 type PendingRequestSummary = {
   id: number | string;
@@ -132,7 +141,7 @@ const AdminDashboard = () => {
           userName: currentUser.full_name,
           userEmail: currentUser.email,
           providerCode: slot.provider.code,
-          providerName: slot.provider.name,
+          providerName: getProviderDisplayName(slot.provider),
           status: slot.integration_request?.status ?? "pending",
           note: slot.integration_request?.note ?? null,
           requestedAt: slot.integration_request?.requested_at ?? slot.integration_request?.created_at ?? null,
@@ -170,7 +179,7 @@ const AdminDashboard = () => {
 
     setReviewForm({
       linkUrl: currentSlot?.integration_link?.link_url ?? "",
-      linkLabel: currentSlot?.integration_link?.link_label ?? `Connect ${selectedRequest.providerName}`,
+      linkLabel: normalizeProviderLinkLabel(currentSlot?.integration_link?.link_label, selectedRequest.providerName),
     });
     setReviewError("");
   }, [selectedRequest, selectedUserIntegrationLinksQuery.data]);
@@ -188,7 +197,7 @@ const AdminDashboard = () => {
           token,
           body: {
             link_url: reviewForm.linkUrl.trim(),
-            link_label: reviewForm.linkLabel.trim() || `Connect ${selectedRequest.providerName}`,
+            link_label: normalizeProviderLinkLabel(reviewForm.linkLabel, selectedRequest.providerName),
             is_active: true,
           },
         },
@@ -206,7 +215,9 @@ const AdminDashboard = () => {
       }
       toast({
         title: "Request confirmed",
-        description: payload.message || `${payload.provider.name} connection is now available for this user.`,
+        description:
+          payload.message?.replace(/\bnium\b/gi, getProviderDisplayName(payload.provider)) ||
+          `${getProviderDisplayName(payload.provider)} connection is now available for this user.`,
       });
       setSelectedRequest(null);
       setReviewForm(emptyReviewForm);
@@ -333,7 +344,7 @@ const AdminDashboard = () => {
             <CardHeader>
               <CardTitle>Pending integration requests</CardTitle>
               <CardDescription>
-                Click a request to review it and confirm Nium account setup without leaving the dashboard.
+                Click a request to review it and confirm account setup without leaving the dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -355,7 +366,7 @@ const AdminDashboard = () => {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                       <span>User #{entry.userId}</span>
-                      <span>{entry.providerCode}</span>
+                      <span>{getProviderDisplayCode(entry.providerCode)}</span>
                       <span>Requested {formatRequestDate(entry.requestedAt)}</span>
                     </div>
                     {entry.note && (
@@ -443,7 +454,7 @@ const AdminDashboard = () => {
           <DialogHeader>
             <DialogTitle>Review integration request</DialogTitle>
             <DialogDescription>
-              Review the customer request and confirm Nium setup directly from the admin dashboard.
+              Review the customer request and confirm account setup directly from the admin dashboard.
             </DialogDescription>
           </DialogHeader>
 
@@ -461,7 +472,7 @@ const AdminDashboard = () => {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                   <span>User #{selectedRequest.userId}</span>
-                  <span>{selectedRequest.providerCode}</span>
+                  <span>{getProviderDisplayCode(selectedRequest.providerCode)}</span>
                   <span>Requested {formatRequestDate(selectedRequest.requestedAt)}</span>
                 </div>
                 {selectedRequest.note && (

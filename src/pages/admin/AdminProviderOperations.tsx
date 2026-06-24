@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { getProviderDisplayCode, getProviderDisplayName } from "@/lib/providerDisplay";
 
 const webhookStatusOptions = [
   { value: "all", label: "All statuses" },
@@ -59,7 +60,7 @@ const statusClassName = (status: string) => {
 };
 
 const getProviderLabel = (providerCode: string, provider?: ProviderSummary | null) =>
-  provider?.name ? `${provider.name} (${providerCode})` : providerCode;
+  `${getProviderDisplayName(provider)} (${getProviderDisplayCode(providerCode)})`;
 
 const AdminProviderOperations = () => {
   const { token } = useAuth();
@@ -188,7 +189,7 @@ const AdminProviderOperations = () => {
                   <Activity className="h-6 w-6 text-emerald-600" />
                   Provider operations
                 </CardTitle>
-                <CardDescription>Monitor provider health, webhook delivery, and retry queues for Nium and future payment partners.</CardDescription>
+                <CardDescription>Monitor infrastructure health, webhook delivery, and retry queues for Origin Wallet operations.</CardDescription>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Select
@@ -205,7 +206,7 @@ const AdminProviderOperations = () => {
                     <SelectItem value="all">All providers</SelectItem>
                     {providers.map((provider) => (
                       <SelectItem key={provider.code} value={provider.code}>
-                        {provider.name}
+                        {getProviderDisplayName(provider)}
                       </SelectItem>
                     ))}
                   </SelectContent>

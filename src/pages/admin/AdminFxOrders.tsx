@@ -27,6 +27,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { getProviderDisplayName, getProviderDisplayCode, PUBLIC_PROVIDER_NAME } from "@/lib/providerDisplay";
 
 type OrderStatusFilter = "all" | "pending" | "confirmed" | "rejected" | "cancelled";
 
@@ -362,7 +363,7 @@ const AdminFxOrders = () => {
                     <SelectItem value="all">All providers</SelectItem>
                     {providers.map((provider) => (
                       <SelectItem key={provider.id} value={String(provider.id)}>
-                        {provider.name}
+                        {getProviderDisplayName(provider)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -400,8 +401,8 @@ const AdminFxOrders = () => {
                                 <div className="text-xs text-slate-500">{getCustomerEmail(order)}</div>
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium text-slate-900">{order.provider?.name || "Nium"}</div>
-                                <div className="text-xs text-slate-500">{order.provider?.code || "nium"}</div>
+                                <div className="font-medium text-slate-900">{getProviderDisplayName(order.provider)}</div>
+                                <div className="text-xs text-slate-500">{getProviderDisplayCode(order.provider?.code)}</div>
                               </TableCell>
                               <TableCell>
                                 <div className="font-medium text-slate-900">
@@ -504,7 +505,7 @@ const AdminFxOrders = () => {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <DetailLine label="Infrastructure" value={selectedOrder.provider?.name || "Nium"} />
+                  <DetailLine label="Infrastructure" value={getProviderDisplayName(selectedOrder.provider)} />
                   <DetailLine label="Send" value={formatAmount(selectedOrder.source_amount, selectedOrder.source_currency)} />
                   <DetailLine label="Receive" value={formatAmount(selectedOrder.target_amount, selectedOrder.target_currency)} />
                   <DetailLine label="FX rate" value={formatNumber(selectedOrder.fx_rate)} />
@@ -580,7 +581,7 @@ const AdminFxOrders = () => {
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <div className="font-semibold text-slate-950">{decisionDialog.order.order_no}</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  {getCustomerName(decisionDialog.order)} - {decisionDialog.order.provider?.name || "Nium"}
+                  {getCustomerName(decisionDialog.order)} - {getProviderDisplayName(decisionDialog.order.provider) || PUBLIC_PROVIDER_NAME}
                 </div>
                 <div className="mt-3 text-sm text-slate-700">
                   {formatAmount(decisionDialog.order.source_amount, decisionDialog.order.source_currency)} to{" "}

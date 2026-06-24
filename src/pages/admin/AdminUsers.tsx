@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
+import { getProviderDisplayCode, getProviderDisplayName, PUBLIC_PROVIDER_NAME } from "@/lib/providerDisplay";
 import type {
   AdminRoleRecord,
   AdminKycProfile,
@@ -71,13 +72,21 @@ const emptyUserForm: UserFormState = {
 
 const getRoleLabel = (role: string | AdminRoleRecord) => (typeof role === "string" ? role : role.role_code || "unknown");
 
+const normalizeProviderLinkLabel = (label?: string | null, providerName = PUBLIC_PROVIDER_NAME) => {
+  if (!label?.trim()) {
+    return `Connect ${providerName}`;
+  }
+
+  return label.trim().replace(/\bnium\b/gi, providerName);
+};
+
 const normalizeIntegrationLinks = (providers: ProviderSummary[]): IntegrationLinkForm[] => {
   return providers.map((provider) => ({
     provider_code: provider.code,
-    provider_name: provider.name,
+    provider_name: getProviderDisplayName(provider),
     provider_status: provider.status,
     link_url: "",
-    link_label: `Connect ${provider.name}`,
+    link_label: normalizeProviderLinkLabel(null, getProviderDisplayName(provider)),
     is_active: true,
     enabled: false,
     request_status: null,
@@ -88,10 +97,10 @@ const normalizeIntegrationLinks = (providers: ProviderSummary[]): IntegrationLin
 const normalizeIntegrationSlots = (slots: AdminUserIntegrationLinkSlot[]): IntegrationLinkForm[] => {
   return slots.map((slot) => ({
     provider_code: slot.provider.code,
-    provider_name: slot.provider.name,
+    provider_name: getProviderDisplayName(slot.provider),
     provider_status: slot.provider.status,
     link_url: slot.integration_link?.link_url ?? "",
-    link_label: slot.integration_link?.link_label ?? `Connect ${slot.provider.name}`,
+    link_label: normalizeProviderLinkLabel(slot.integration_link?.link_label, getProviderDisplayName(slot.provider)),
     is_active: slot.integration_link?.is_active ?? true,
     enabled: Boolean(slot.integration_link),
     request_status: slot.integration_request?.status ?? null,
@@ -230,7 +239,7 @@ const AdminUsers = () => {
       const pendingProviders =
         query?.data?.data
           .filter((slot) => slot.integration_request?.status?.toLowerCase() === "pending")
-          .map((slot) => slot.provider.name) ?? [];
+          .map((slot) => getProviderDisplayName(slot.provider)) ?? [];
 
       accumulator[row.id] = {
         count: pendingProviders.length,
@@ -815,7 +824,9 @@ const AdminUsers = () => {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="font-medium text-slate-900">{linkState.provider_name}</div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{linkState.provider_code}</div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                            {getProviderDisplayCode(linkState.provider_code)}
+                          </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <Label htmlFor={`provider-enabled-${linkState.provider_code}`} className="text-sm text-slate-600">

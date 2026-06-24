@@ -159,7 +159,7 @@ const AdminTransactions = () => {
           <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle className="text-2xl">Transfer queue</CardTitle>
-              <CardDescription>Approve, reject, and sync provider payout status before money moves through Nium.</CardDescription>
+              <CardDescription>Approve, reject, and sync payout status before money moves through Origin Wallet.</CardDescription>
             </div>
             <Button
               variant="outline"
@@ -243,7 +243,7 @@ const AdminTransactions = () => {
                         </TableCell>
                         <TableCell>
                           <div className="text-slate-900">{row.user?.email || `User #${row.user_id}`}</div>
-                          <div className="text-xs text-slate-500">{row.provider?.name || "Nium"}</div>
+                          <div className="text-xs text-slate-500">Origin Wallet</div>
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-slate-900">

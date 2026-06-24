@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { getProviderDisplayCode, getProviderDisplayName, INTERNAL_PROVIDER_CODE } from "@/lib/providerDisplay";
 
 type RateFormState = {
   rate_type: "provider" | "bank";
@@ -96,6 +97,11 @@ const numberOrNull = (value: string) => {
   return trimmed === "" ? null : Number(trimmed);
 };
 
+const normalizeSourceCodeForSubmit = (sourceCode: string) => {
+  const trimmed = sourceCode.trim();
+  return trimmed.toLowerCase() === "origin-wallet" ? INTERNAL_PROVIDER_CODE : trimmed;
+};
+
 const formatRate = (value: string | number | null | undefined) => {
   if (value === null || value === undefined || value === "") return "-";
   const numeric = Number(value);
@@ -128,8 +134,11 @@ const groupProviderRates = (rows: ManagedExchangeRate[]): ProviderRateGroup[] =>
 
       return {
         key,
-        sourceCode: sortedRows[0]?.source_code ?? key,
-        sourceName: sortedRows[0]?.source_name ?? key,
+        sourceCode: getProviderDisplayCode(sortedRows[0]?.source_code ?? key),
+        sourceName: getProviderDisplayName({
+          code: sortedRows[0]?.source_code ?? key,
+          name: sortedRows[0]?.source_name ?? key,
+        }),
         rows: sortedRows,
         pairs,
         currencies,
@@ -240,8 +249,8 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
     setFormState({
       rate_type: rate.rate_type,
       audience: rate.audience,
-      source_code: rate.source_code,
-      source_name: rate.source_name,
+      source_code: getProviderDisplayCode(rate.source_code),
+      source_name: getProviderDisplayName({ code: rate.source_code, name: rate.source_name }),
       source_currency: rate.source_currency,
       target_currency: rate.target_currency,
       buy_rate: rate.buy_rate === null ? "" : String(rate.buy_rate),
@@ -272,7 +281,7 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
     const payload = {
       rate_type: formState.rate_type,
       audience: formState.audience,
-      source_code: formState.source_code.trim(),
+      source_code: normalizeSourceCodeForSubmit(formState.source_code),
       source_name: formState.source_name.trim(),
       source_currency: formState.source_currency.trim().toUpperCase(),
       target_currency: formState.target_currency.trim().toUpperCase(),
@@ -416,7 +425,11 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
                                     size="sm"
                                     className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                                     onClick={() => {
-                                      if (window.confirm(`Delete rate for ${row.source_name} ${row.source_currency}/${row.target_currency}?`)) {
+                                      const displaySourceName = getProviderDisplayName({
+                                        code: row.source_code,
+                                        name: row.source_name,
+                                      });
+                                      if (window.confirm(`Delete rate for ${displaySourceName} ${row.source_currency}/${row.target_currency}?`)) {
                                         void deleteMutation.mutateAsync(row.id);
                                       }
                                     }}
@@ -460,8 +473,10 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
                     rows.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell>
-                          <div className="font-medium text-slate-900">{row.source_name}</div>
-                          <div className="text-xs text-slate-500">{row.source_code}</div>
+                          <div className="font-medium text-slate-900">
+                            {getProviderDisplayName({ code: row.source_code, name: row.source_name })}
+                          </div>
+                          <div className="text-xs text-slate-500">{getProviderDisplayCode(row.source_code)}</div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{row.rate_type}</Badge>
@@ -572,7 +587,7 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
               <Input
                 value={formState.source_code}
                 onChange={(event) => setFormState((current) => ({ ...current, source_code: event.target.value }))}
-                placeholder={isProviderMode || formState.rate_type === "provider" ? "nium" : "vcb"}
+                placeholder={isProviderMode || formState.rate_type === "provider" ? "origin-wallet" : "vcb"}
               />
             </div>
 
@@ -581,7 +596,7 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
               <Input
                 value={formState.source_name}
                 onChange={(event) => setFormState((current) => ({ ...current, source_name: event.target.value }))}
-                placeholder={isProviderMode || formState.rate_type === "provider" ? "Nium" : "Vietcombank"}
+                placeholder={isProviderMode || formState.rate_type === "provider" ? "Origin Wallet" : "Vietcombank"}
               />
             </div>
 

@@ -3,6 +3,7 @@ import { Building2, ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2 } from "
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
+import { getProviderDisplayCode, getProviderDisplayName } from "@/lib/providerDisplay";
 import type { ProviderSummary } from "@/types/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -161,7 +162,7 @@ const AdminProviders = () => {
     setSelectedProvider(provider);
     setFormState({
       code: provider.code,
-      name: provider.name,
+      name: getProviderDisplayName(provider),
       logo_url: provider.logo_url ?? "",
       status: provider.status === "inactive" ? "inactive" : "active",
     });
@@ -211,7 +212,9 @@ const AdminProviders = () => {
 
   const handleDelete = async (provider: ProviderSummary) => {
     setDeleteError("");
-    const confirmed = window.confirm(`Delete provider ${provider.name} (${provider.code})?`);
+    const confirmed = window.confirm(
+      `Delete provider ${getProviderDisplayName(provider)} (${getProviderDisplayCode(provider.code)})?`,
+    );
     if (!confirmed) {
       return;
     }
@@ -258,9 +261,9 @@ const AdminProviders = () => {
                           <div className="flex items-center gap-3">
                             <ProviderLogoPreview provider={row} />
                             <div className="min-w-0">
-                              <div className="font-medium text-slate-900">{row.name}</div>
+                              <div className="font-medium text-slate-900">{getProviderDisplayName(row)}</div>
                               <div className="mt-1 text-xs text-slate-500">
-                                #{row.id} - <span className="break-all">{row.code}</span>
+                                #{row.id} - <span className="break-all">{getProviderDisplayCode(row.code)}</span>
                               </div>
                             </div>
                           </div>
@@ -334,12 +337,12 @@ const AdminProviders = () => {
                             <div className="flex items-center gap-3">
                               <ProviderLogoPreview provider={row} />
                               <div>
-                                <div className="font-medium text-slate-900">{row.name}</div>
+                                <div className="font-medium text-slate-900">{getProviderDisplayName(row)}</div>
                                 <div className="text-xs text-slate-500">#{row.id}</div>
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>{row.code}</TableCell>
+                          <TableCell>{getProviderDisplayCode(row.code)}</TableCell>
                           <TableCell>
                             <Badge variant={row.status === "active" ? "default" : "secondary"}>{row.status}</Badge>
                           </TableCell>
@@ -427,11 +430,12 @@ const AdminProviders = () => {
               <Label htmlFor="provider-code">Code</Label>
               <Input
                 id="provider-code"
-                value={formState.code}
+                value={dialogMode === "edit" ? getProviderDisplayCode(selectedProvider?.code ?? formState.code) : formState.code}
                 onChange={(event) => setFormState((current) => ({ ...current, code: event.target.value.toLowerCase() }))}
-                placeholder="airwallex"
+                placeholder="origin-wallet"
+                disabled={dialogMode === "edit"}
               />
-              <p className="text-xs text-slate-500">Use one stable lowercase code, for example lianlian.</p>
+              <p className="text-xs text-slate-500">Use one stable lowercase code. Existing provider codes cannot be changed.</p>
             </div>
 
             <div className="grid gap-2">
@@ -440,7 +444,7 @@ const AdminProviders = () => {
                 id="provider-name"
                 value={formState.name}
                 onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Nium"
+                placeholder="Origin Wallet"
               />
             </div>
 
@@ -494,13 +498,14 @@ const AdminProviders = () => {
 };
 
 const ProviderLogoPreview = ({ provider }: { provider: Pick<ProviderSummary, "code" | "name" | "logo_url"> }) => {
-  const fallback = (provider.name || provider.code || "P").slice(0, 1).toUpperCase();
+  const providerLabel = getProviderDisplayName(provider);
+  const fallback = providerLabel.slice(0, 1).toUpperCase();
 
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700">
       {provider.logo_url ? (
-        <img src={provider.logo_url} alt={provider.name || provider.code} className="h-full w-full object-contain p-1.5" />
-      ) : provider.name || provider.code ? (
+        <img src={provider.logo_url} alt={providerLabel} className="h-full w-full object-contain p-1.5" />
+      ) : providerLabel ? (
         fallback
       ) : (
         <ImageIcon className="h-5 w-5" />

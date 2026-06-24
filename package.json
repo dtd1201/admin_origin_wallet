@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "npm@10.9.2",
   "description": "Origin Wallet Admin - standalone admin frontend sharing the same API stack",
-  "author": "KHOI NGUYEN TECHNOLOGY JSC",
+  "author": "Origin Wallet",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -90,4 +90,3 @@
     "vitest": "^3.2.4"
   }
 }
-
