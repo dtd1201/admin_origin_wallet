@@ -138,8 +138,8 @@ const AdminProviderOperations = () => {
     onSuccess: async (response) => {
       await invalidateOperations();
       toast({
-        title: "Provider check queued",
-        description: response.message || "Provider health check has been requested.",
+        title: "Provider check completed",
+        description: response.message || "Provider health check completed synchronously.",
       });
     },
     onError: (error) => {
@@ -161,8 +161,8 @@ const AdminProviderOperations = () => {
     onSuccess: async (response) => {
       await invalidateOperations();
       toast({
-        title: "Webhook retry queued",
-        description: response.message || "Webhook event retry has been requested.",
+        title: "Webhook retry completed",
+        description: response.message || "Webhook event retry completed synchronously.",
       });
     },
     onError: (error) => {
@@ -407,7 +407,7 @@ const AdminProviderOperations = () => {
               <Webhook className="h-5 w-5 text-emerald-600" />
               Event detail
             </CardTitle>
-            <CardDescription>Raw provider payload for the selected webhook event.</CardDescription>
+            <CardDescription>Redacted operational fields for the selected webhook event.</CardDescription>
           </CardHeader>
           <CardContent>
             {selectedEvent ? (
