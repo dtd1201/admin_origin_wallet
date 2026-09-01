@@ -1,15 +1,39 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, CheckCircle2, Clock3, ReceiptText, RefreshCcw, XCircle } from "lucide-react";
+import { ArrowRightLeft, Clock3, Eye, ReceiptText, RefreshCcw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
 import type { AdminTransfer } from "@/types/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 
-const terminalStatuses = ["completed", "failed", "cancelled", "rejected"];
+type TransferAction = "approve" | "reject";
+
+const workflowStatusLabels: Record<string, string> = {
+  pending: "Pending",
+  submitted: "Submitted",
+  processing: "Processing",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  submission_unknown: "Submission unknown",
+};
+
+export const maskTransferIdentifier = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === "") return "-";
+  const text = String(value);
+  const suffix = text.slice(-4);
+  const prefix = text.length > 8 ? text.slice(0, 2) : "";
+  return `${prefix}****${suffix}`;
+};
+
+export const transferStatusLabel = (status: string) =>
+  workflowStatusLabels[status.toLowerCase()] ?? status.replace(/_/g, " ");
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -68,12 +92,21 @@ const AdminTransactions = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [page, setPage] = useState(1);
+  const [selectedTransferId, setSelectedTransferId] = useState<number | null>(null);
+  const [pendingAction, setPendingAction] = useState<TransferAction | null>(null);
 
   const transfersQuery = useQuery({
-    queryKey: ["admin", "transfers", token],
+    queryKey: ["admin", "transfers", page, token],
     enabled: !!token,
     queryFn: async () =>
-      requestApi<PaginatedResponse<AdminTransfer>>(adminEndpointConfig.transfers, { method: "GET", token }),
+      requestApi<PaginatedResponse<AdminTransfer>>(`${adminEndpointConfig.transfers}?page=${page}`, { method: "GET", token }),
+  });
+
+  const transferDetailQuery = useQuery({
+    queryKey: ["admin", "transfer", selectedTransferId, token],
+    enabled: !!token && selectedTransferId !== null,
+    queryFn: async () => requestApi<AdminTransfer>(`${adminEndpointConfig.transfers}/${selectedTransferId}`, { method: "GET", token }),
   });
 
   const invalidateTransfers = async () => {
@@ -108,7 +141,7 @@ const AdminTransactions = () => {
       requestApi<{ message?: string }>(`${adminEndpointConfig.transfers}/${transferId}/reject`, {
         method: "POST",
         token,
-        body: { note: "Rejected from admin transfer queue." },
+        body: {},
       }),
     onSuccess: async (response) => {
       await invalidateTransfers();
@@ -151,6 +184,17 @@ const AdminTransactions = () => {
 
   const rows = transfersQuery.data?.data ?? [];
   const mutationPending = approveMutation.isPending || rejectMutation.isPending || syncMutation.isPending;
+  const currentPage = transfersQuery.data?.current_page ?? page;
+  const lastPage = transfersQuery.data?.last_page ?? 1;
+  const selectedTransfer = transferDetailQuery.data;
+
+  const confirmAction = () => {
+    if (!pendingAction || !selectedTransfer) return;
+    if (pendingAction === "approve") approveMutation.mutate(selectedTransfer.id);
+    else rejectMutation.mutate(selectedTransfer.id);
+    setPendingAction(null);
+    setSelectedTransferId(null);
+  };
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
@@ -184,10 +228,10 @@ const AdminTransactions = () => {
                   <div key={row.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-900">{row.transfer_no}</div>
+                        <div className="font-medium text-slate-900">{maskTransferIdentifier(row.transfer_no)}</div>
                         <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
                       </div>
-                      <Badge className={statusClassName(row.status)}>{row.status}</Badge>
+                      <Badge className={statusClassName(row.status)}>{transferStatusLabel(row.status)}</Badge>
                     </div>
 
                     <div className="mt-4 grid gap-2 text-sm text-slate-600">
@@ -201,13 +245,7 @@ const AdminTransactions = () => {
                       {row.failure_reason && <div className="text-xs text-red-600">{row.failure_reason}</div>}
                     </div>
 
-                    <TransferActions
-                      transfer={row}
-                      disabled={mutationPending}
-                      onApprove={() => void approveMutation.mutateAsync(row.id)}
-                      onReject={() => void rejectMutation.mutateAsync(row.id)}
-                      onSync={() => void syncMutation.mutateAsync(row.id)}
-                    />
+                    <TransferActions transfer={row} disabled={mutationPending} onReview={() => setSelectedTransferId(row.id)} onSync={() => void syncMutation.mutateAsync(row.id)} />
                   </div>
                 ))
               ) : (
@@ -233,11 +271,11 @@ const AdminTransactions = () => {
                     rows.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell>
-                          <div className="font-medium text-slate-900">{row.transfer_no}</div>
+                          <div className="font-medium text-slate-900">{maskTransferIdentifier(row.transfer_no)}</div>
                           <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
                           {(row.external_transfer_id || row.external_payment_id) && (
                             <div className="mt-1 max-w-[240px] truncate text-xs text-slate-400">
-                              {row.external_transfer_id || row.external_payment_id}
+                              {maskTransferIdentifier(row.external_transfer_id || row.external_payment_id)}
                             </div>
                           )}
                         </TableCell>
@@ -254,7 +292,7 @@ const AdminTransactions = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={statusClassName(row.status)}>{row.status}</Badge>
+                          <Badge className={statusClassName(row.status)}>{transferStatusLabel(row.status)}</Badge>
                           {row.failure_reason && <div className="mt-2 max-w-[260px] truncate text-xs text-red-600">{row.failure_reason}</div>}
                         </TableCell>
                         <TableCell>
@@ -262,8 +300,7 @@ const AdminTransactions = () => {
                             transfer={row}
                             disabled={mutationPending}
                             compact
-                            onApprove={() => void approveMutation.mutateAsync(row.id)}
-                            onReject={() => void rejectMutation.mutateAsync(row.id)}
+                            onReview={() => setSelectedTransferId(row.id)}
                             onSync={() => void syncMutation.mutateAsync(row.id)}
                           />
                         </TableCell>
@@ -278,6 +315,13 @@ const AdminTransactions = () => {
                   )}
                 </TableBody>
               </Table>
+            </div>
+            <div className="mt-5 flex items-center justify-between text-sm text-slate-500">
+              <span>Page {currentPage} of {lastPage}</span>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentPage >= lastPage} onClick={() => setPage((value) => value + 1)}>Next</Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -297,12 +341,12 @@ const AdminTransactions = () => {
                 },
                 {
                   icon: Clock3,
-                  title: "Need approval",
+                  title: "Need approval on page",
                   description: String(rows.filter((row) => row.status === "approval_required").length),
                 },
                 {
                   icon: ReceiptText,
-                  title: "In provider flow",
+                  title: "In provider flow on page",
                   description: String(rows.filter((row) => ["submitted", "pending"].includes(row.status)).length),
                 },
               ].map((item) => (
@@ -318,38 +362,75 @@ const AdminTransactions = () => {
           </Card>
         </div>
       </div>
+
+      <Dialog open={selectedTransferId !== null} onOpenChange={(open) => { if (!open) setSelectedTransferId(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Transfer review</DialogTitle>
+            <DialogDescription>Review the transfer lifecycle and customer-safe payment details before taking action.</DialogDescription>
+          </DialogHeader>
+          {transferDetailQuery.isLoading && <div className="py-8 text-center text-slate-500">Loading transfer detail...</div>}
+          {transferDetailQuery.isError && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{transferDetailQuery.error instanceof Error ? transferDetailQuery.error.message : "Unable to load transfer detail."}</div>}
+          {selectedTransfer && <TransferReview transfer={selectedTransfer} />}
+          {selectedTransfer && (
+            <DialogFooter className="gap-2 sm:gap-0">
+              {canReject(selectedTransfer) && <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" disabled={mutationPending} onClick={() => setPendingAction("reject")}>Reject</Button>}
+              {canApprove(selectedTransfer) && <Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={mutationPending} onClick={() => setPendingAction("approve")}>Approve</Button>}
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) setPendingAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingAction === "approve" ? "Approve this transfer?" : "Reject this transfer?"}</AlertDialogTitle>
+            <AlertDialogDescription>This action changes the transfer workflow. Confirm only after reviewing the transfer details.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAction}>{pendingAction === "approve" ? "Confirm approval" : "Confirm rejection"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
+};
+
+const TransferReview = ({ transfer }: { transfer: AdminTransfer }) => {
+  const beneficiaryName = transfer.beneficiary?.company_name || transfer.beneficiary?.full_name;
+  const fields = [
+    ["Transfer ID", maskTransferIdentifier(transfer.transfer_no || transfer.id)],
+    ["Status", transferStatusLabel(transfer.status)],
+    ["Source amount", formatAmount(transfer.source_amount, transfer.source_currency)],
+    ["Target amount", formatAmount(transfer.target_amount, transfer.target_currency)],
+    ["Provider status", transfer.provider_status ? transferStatusLabel(transfer.provider_status) : "-"],
+    ["Failure reason", transfer.failure_reason || "-"],
+    ["Created", formatDate(transfer.created_at)],
+    ["Submitted", formatDate(transfer.submitted_at)],
+  ];
+  return <div className="space-y-4">
+    <dl className="grid gap-3 sm:grid-cols-2">{fields.map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 text-sm text-slate-900">{value}</dd></div>)}</dl>
+    {beneficiaryName && <div className="rounded-2xl border border-slate-200 p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Beneficiary summary</div><div className="mt-2 font-medium text-slate-900">{beneficiaryName}</div><div className="mt-1 text-sm text-slate-600">{[transfer.beneficiary?.bank_name, transfer.beneficiary?.country_code, transfer.beneficiary?.currency, transfer.beneficiary?.status].filter(Boolean).join(" · ")}</div></div>}
+    {(transfer.external_transfer_id || transfer.external_payment_id) && <div className="text-xs text-slate-500">Provider reference: {maskTransferIdentifier(transfer.external_transfer_id || transfer.external_payment_id)}</div>}
+  </div>;
 };
 
 const TransferActions = ({
   compact = false,
   disabled,
-  onApprove,
-  onReject,
+  onReview,
   onSync,
   transfer,
 }: {
   compact?: boolean;
   disabled?: boolean;
-  onApprove: () => void;
-  onReject: () => void;
+  onReview: () => void;
   onSync: () => void;
   transfer: AdminTransfer;
 }) => (
   <div className={compact ? "flex justify-end gap-2" : "mt-4 flex flex-wrap gap-2"}>
-    {canApprove(transfer) && (
-      <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={disabled} onClick={onApprove}>
-        <CheckCircle2 className="h-4 w-4" />
-        Approve
-      </Button>
-    )}
-    {canReject(transfer) && (
-      <Button size="sm" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" disabled={disabled} onClick={onReject}>
-        <XCircle className="h-4 w-4" />
-        Reject
-      </Button>
-    )}
+    <Button size="sm" variant="outline" disabled={disabled} onClick={onReview}><Eye className="h-4 w-4" />Review</Button>
     {canSync(transfer) && (
       <Button size="sm" variant="outline" disabled={disabled} onClick={onSync}>
         <RefreshCcw className="h-4 w-4" />
