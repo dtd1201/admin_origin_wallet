@@ -28,6 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getProviderDisplayName, getProviderDisplayCode, PUBLIC_PROVIDER_NAME } from "@/lib/providerDisplay";
+import { getAdminErrorCategory, maskAdminIdentifier } from "@/lib/adminDataSafety";
 
 type OrderStatusFilter = "all" | "pending" | "confirmed" | "rejected" | "cancelled";
 
@@ -110,15 +111,21 @@ const statusClassName = (status: string) => {
   return "bg-slate-100 text-slate-700 hover:bg-slate-100";
 };
 
-const getCustomerName = (order: AdminFxOrder) =>
-  order.customer_snapshot?.user?.full_name ||
-  order.user?.full_name ||
-  order.customer_snapshot?.kyc_profile?.business_name ||
-  order.customer_snapshot?.kyc_profile?.legal_name ||
-  `User #${order.user_id}`;
+const getCustomerName = (order: AdminFxOrder): string => {
+  const directName = order.customer_snapshot?.user?.full_name || order.user?.full_name;
+  if (directName) return directName;
+
+  const snapshotName =
+    order.customer_snapshot?.kyc_profile?.business_name ||
+    order.customer_snapshot?.kyc_profile?.legal_name;
+
+  return typeof snapshotName === "string" || typeof snapshotName === "number"
+    ? String(snapshotName)
+    : maskAdminIdentifier(order.user_id);
+};
 
 const getCustomerEmail = (order: AdminFxOrder) =>
-  order.customer_snapshot?.user?.email || order.user?.email || "No email snapshot";
+  maskAdminIdentifier(order.customer_snapshot?.user?.email || order.user?.email);
 
 const getSnapshotValue = (record: Record<string, string | number | boolean | null | undefined> | null | undefined, key: string) => {
   const value = record?.[key];
@@ -226,11 +233,11 @@ const AdminFxOrders = () => {
       setActionError("");
       toast({
         title: "FX order confirmed",
-        description: response.message || `${response.order.order_no} has been confirmed.`,
+        description: `${maskAdminIdentifier(response.order.order_no)} has been confirmed.`,
       });
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : "Unable to confirm this FX order.";
+      const message = `Unable to confirm this FX order. Error category: ${getAdminErrorCategory(error instanceof Error ? error.message : null)}.`;
       setActionError(message);
       toast({ variant: "destructive", title: "Confirmation failed", description: message });
     },
@@ -251,11 +258,11 @@ const AdminFxOrders = () => {
       setActionError("");
       toast({
         title: "FX order rejected",
-        description: response.message || `${response.order.order_no} has been rejected.`,
+        description: `${maskAdminIdentifier(response.order.order_no)} has been rejected.`,
       });
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : "Unable to reject this FX order.";
+      const message = `Unable to reject this FX order. Error category: ${getAdminErrorCategory(error instanceof Error ? error.message : null)}.`;
       setActionError(message);
       toast({ variant: "destructive", title: "Rejection failed", description: message });
     },
@@ -393,11 +400,11 @@ const AdminFxOrders = () => {
                           return (
                             <TableRow key={order.id} className={isSelected ? "bg-emerald-50/70" : undefined}>
                               <TableCell>
-                                <div className="font-semibold text-slate-950">{order.order_no}</div>
+                                <div className="font-semibold text-slate-950">{maskAdminIdentifier(order.order_no)}</div>
                                 <div className="text-xs text-slate-500">{formatDate(order.created_at)}</div>
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium text-slate-900">{getCustomerName(order)}</div>
+                                <div className="font-medium text-slate-900">{maskAdminIdentifier(getCustomerName(order))}</div>
                                 <div className="text-xs text-slate-500">{getCustomerEmail(order)}</div>
                               </TableCell>
                               <TableCell>
@@ -491,15 +498,15 @@ const AdminFxOrders = () => {
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="text-lg font-semibold text-slate-950">{selectedOrder.order_no}</div>
+                      <div className="text-lg font-semibold text-slate-950">{maskAdminIdentifier(selectedOrder.order_no)}</div>
                       <div className="text-sm text-slate-500">{formatDate(selectedOrder.created_at)}</div>
                     </div>
                     <Badge className={statusClassName(selectedOrder.status)}>{selectedOrder.status}</Badge>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <DetailLine label="Customer" value={getCustomerName(selectedOrder)} />
+                    <DetailLine label="Customer" value={maskAdminIdentifier(getCustomerName(selectedOrder))} />
                     <DetailLine label="Email" value={getCustomerEmail(selectedOrder)} />
-                    <DetailLine label="Phone" value={selectedOrder.customer_snapshot?.user?.phone || selectedOrder.user?.phone} />
+                    <DetailLine label="Phone" value={maskAdminIdentifier(selectedOrder.customer_snapshot?.user?.phone || selectedOrder.user?.phone)} />
                     <DetailLine label="KYC status" value={selectedOrder.customer_snapshot?.user?.kyc_status || selectedOrder.user?.kyc_status} />
                   </div>
                 </div>
@@ -517,9 +524,9 @@ const AdminFxOrders = () => {
                   <div className="font-semibold text-slate-950">Profile snapshot</div>
                   <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                     <DetailLine label="User type" value={getSnapshotValue(selectedProfile, "user_type")} />
-                    <DetailLine label="Company" value={getSnapshotValue(selectedProfile, "company_name")} />
-                    <DetailLine label="Legal name" value={getSnapshotValue(selectedKycProfile, "legal_name")} />
-                    <DetailLine label="Business name" value={getSnapshotValue(selectedKycProfile, "business_name")} />
+                    <DetailLine label="Company" value={maskAdminIdentifier(getSnapshotValue(selectedProfile, "company_name"))} />
+                    <DetailLine label="Legal name" value={maskAdminIdentifier(getSnapshotValue(selectedKycProfile, "legal_name"))} />
+                    <DetailLine label="Business name" value={maskAdminIdentifier(getSnapshotValue(selectedKycProfile, "business_name"))} />
                     <DetailLine label="Country" value={getSnapshotValue(selectedKycProfile, "country_code")} />
                     <DetailLine label="City" value={getSnapshotValue(selectedKycProfile, "city")} />
                   </div>
@@ -530,13 +537,6 @@ const AdminFxOrders = () => {
                   <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
                     {selectedOrder.admin_note || "No admin note recorded."}
                   </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-slate-100">
-                  <div className="font-semibold">Raw submission data</div>
-                  <pre className="mt-3 max-h-64 overflow-auto text-xs leading-5 text-slate-300">
-                    {JSON.stringify(selectedOrder.raw_data ?? {}, null, 2)}
-                  </pre>
                 </div>
 
                 {selectedOrder.status === "pending" && (
@@ -579,9 +579,9 @@ const AdminFxOrders = () => {
           {decisionDialog && (
             <div className="space-y-5">
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="font-semibold text-slate-950">{decisionDialog.order.order_no}</div>
+                <div className="font-semibold text-slate-950">{maskAdminIdentifier(decisionDialog.order.order_no)}</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  {getCustomerName(decisionDialog.order)} - {getProviderDisplayName(decisionDialog.order.provider) || PUBLIC_PROVIDER_NAME}
+                  {maskAdminIdentifier(getCustomerName(decisionDialog.order))} - {getProviderDisplayName(decisionDialog.order.provider) || PUBLIC_PROVIDER_NAME}
                 </div>
                 <div className="mt-3 text-sm text-slate-700">
                   {formatAmount(decisionDialog.order.source_amount, decisionDialog.order.source_currency)} to{" "}

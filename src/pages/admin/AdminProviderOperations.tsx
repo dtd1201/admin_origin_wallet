@@ -17,6 +17,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { getProviderDisplayCode, getProviderDisplayName } from "@/lib/providerDisplay";
+import { getAdminErrorCategory, maskAdminIdentifier } from "@/lib/adminDataSafety";
 
 const webhookStatusOptions = [
   { value: "all", label: "All statuses" },
@@ -62,12 +63,43 @@ const statusClassName = (status: string) => {
 const getProviderLabel = (providerCode: string, provider?: ProviderSummary | null) =>
   `${getProviderDisplayName(provider)} (${getProviderDisplayCode(providerCode)})`;
 
+const safeWebhookPayloadFields = new Set([
+  "template", "status", "subStatus", "complianceStatus", "currency", "currencyCode",
+  "amount", "sourceAmount", "destinationAmount", "fee", "feeAmount", "accountCategory",
+  "accountType", "dateTime", "createdAt", "updatedAt", "lastUpdatedAt", "completedAt",
+  "uniquePaymentId", "paymentId", "payment_id", "customerHashId", "walletHashId",
+]);
+
+const maskedWebhookFields = new Set([
+  "uniquePaymentId", "paymentId", "payment_id", "customerHashId", "walletHashId",
+]);
+
+const payloadText = (event: AdminProviderWebhookEvent, key: string) => {
+  const value = event.payload?.[key];
+  return typeof value === "string" ? value.trim() : "";
+};
+
+const eventTemplate = (event: AdminProviderWebhookEvent) => payloadText(event, "template") || event.event_type;
+const isVirtualAccountAssignment = (event: AdminProviderWebhookEvent) => eventTemplate(event).toUpperCase() === "VIRTUAL_ACCOUNT_ASSIGNED";
+const isWalletFunding = (event: AdminProviderWebhookEvent) => eventTemplate(event).toUpperCase() === "CARD_WALLET_FUNDING_WEBHOOK";
+
+const evidenceTitle = (event: AdminProviderWebhookEvent) => {
+  if (isVirtualAccountAssignment(event)) return "NIUM Virtual Account Assignment Evidence";
+  if (isWalletFunding(event)) return "NIUM Wallet Funding Evidence";
+  return "Provider Webhook Evidence";
+};
+
+const displayWebhookValue = (key: string, value: unknown) => {
+  if (!["string", "number", "boolean"].includes(typeof value)) return "Redacted structured value";
+  return maskedWebhookFields.has(key) ? maskAdminIdentifier(String(value)) : String(value);
+};
+
 const AdminProviderOperations = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [providerFilter, setProviderFilter] = useState("all");
-  const [webhookStatusFilter, setWebhookStatusFilter] = useState("failed");
+  const [webhookStatusFilter, setWebhookStatusFilter] = useState("all");
   const [webhookPage, setWebhookPage] = useState(1);
   const [selectedEvent, setSelectedEvent] = useState<AdminProviderWebhookEvent | null>(null);
 
@@ -135,18 +167,18 @@ const AdminProviderOperations = () => {
         token,
         body: {},
       }),
-    onSuccess: async (response) => {
+    onSuccess: async () => {
       await invalidateOperations();
       toast({
         title: "Provider check completed",
-        description: response.message || "Provider health check completed synchronously.",
+        description: "Provider health check completed synchronously.",
       });
     },
     onError: (error) => {
       toast({
         variant: "destructive",
         title: "Provider check failed",
-        description: error instanceof Error ? error.message : "Unable to request provider health check.",
+        description: `Unable to request provider health check. Error category: ${getAdminErrorCategory(error instanceof Error ? error.message : null)}.`,
       });
     },
   });
@@ -158,18 +190,18 @@ const AdminProviderOperations = () => {
         token,
         body: {},
       }),
-    onSuccess: async (response) => {
+    onSuccess: async () => {
       await invalidateOperations();
       toast({
         title: "Webhook retry completed",
-        description: response.message || "Webhook event retry completed synchronously.",
+        description: "Webhook event retry completed synchronously.",
       });
     },
     onError: (error) => {
       toast({
         variant: "destructive",
         title: "Webhook retry failed",
-        description: error instanceof Error ? error.message : "Unable to retry webhook event.",
+        description: `Unable to retry webhook event. Error category: ${getAdminErrorCategory(error instanceof Error ? error.message : null)}.`,
       });
     },
   });
@@ -225,11 +257,9 @@ const AdminProviderOperations = () => {
             <CardContent className="space-y-6">
               {(healthQuery.isError || webhookEventsQuery.isError) && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                  {healthQuery.error instanceof Error
-                    ? healthQuery.error.message
-                    : webhookEventsQuery.error instanceof Error
-                      ? webhookEventsQuery.error.message
-                      : "Unable to load provider operations."}
+                  Unable to load provider operations. Error category: {getAdminErrorCategory(
+                    healthQuery.error instanceof Error ? healthQuery.error.message : webhookEventsQuery.error instanceof Error ? webhookEventsQuery.error.message : null,
+                  )}.
                 </div>
               )}
 
@@ -263,7 +293,7 @@ const AdminProviderOperations = () => {
                               <TableCell>
                                 <div className="font-semibold text-slate-950">{getProviderLabel(row.provider_code, row.provider)}</div>
                                 <div className="text-xs text-slate-500">{row.environment || "environment unknown"}</div>
-                                {row.error_message && <div className="mt-2 max-w-[320px] truncate text-xs text-red-600">{row.error_message}</div>}
+                                {row.error_message && <div className="mt-2 text-xs text-red-600">Error category: {getAdminErrorCategory(row.error_message)}</div>}
                               </TableCell>
                               <TableCell>
                                 <Badge className={statusClassName(row.status)}>{row.status}</Badge>
@@ -342,8 +372,8 @@ const AdminProviderOperations = () => {
                             <TableRow key={event.id} className={selectedEvent?.id === event.id ? "bg-emerald-50/70" : undefined}>
                               <TableCell>
                                 <div className="font-semibold text-slate-950">{event.event_type}</div>
-                                <div className="text-xs text-slate-500">{event.event_id || event.related_reference || `#${event.id}`}</div>
-                                {event.error_message && <div className="mt-2 max-w-[320px] truncate text-xs text-red-600">{event.error_message}</div>}
+                                <div className="text-xs text-slate-500">{maskAdminIdentifier(event.event_id || event.related_reference || event.id)}</div>
+                                {event.error_message && <div className="mt-2 text-xs text-red-600">Error category: {getAdminErrorCategory(event.error_message)}</div>}
                               </TableCell>
                               <TableCell>{getProviderLabel(event.provider_code, event.provider)}</TableCell>
                               <TableCell>
@@ -413,25 +443,49 @@ const AdminProviderOperations = () => {
             {selectedEvent ? (
               <div className="space-y-4">
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="font-semibold text-slate-950">{selectedEvent.event_type}</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{evidenceTitle(selectedEvent)}</div>
+                  <div className="mt-2 font-semibold text-slate-950">{selectedEvent.event_type}</div>
                   <div className="mt-1 text-sm text-slate-500">
                     {getProviderLabel(selectedEvent.provider_code, selectedEvent.provider)}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge className={statusClassName(selectedEvent.status)}>{selectedEvent.status}</Badge>
+                    <Badge variant="outline">Provider-confirmed webhook</Badge>
                     <Badge variant="outline">{selectedEvent.attempts ?? 0} attempts</Badge>
                   </div>
                 </div>
-                <div className="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-slate-100">
-                  <div className="font-semibold">Payload</div>
-                  <pre className="mt-3 max-h-[520px] overflow-auto whitespace-pre-wrap text-xs leading-5 text-slate-300">
-                    {JSON.stringify(selectedEvent.payload ?? {}, null, 2)}
-                  </pre>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SafeDetail label="Local event ID" value={String(selectedEvent.id)} />
+                  <SafeDetail label="Provider event reference" value={maskAdminIdentifier(selectedEvent.event_id || selectedEvent.related_reference)} />
+                  <SafeDetail label="Event type" value={selectedEvent.event_type} />
+                  <SafeDetail label="Processing status" value={selectedEvent.status} />
+                  <SafeDetail label="Received" value={formatDate(selectedEvent.received_at)} />
+                  <SafeDetail label="Processed" value={formatDate(selectedEvent.processed_at)} />
+                  <SafeDetail label="Next retry" value={formatDate(selectedEvent.next_retry_at)} />
+                  <SafeDetail label="Result" value={selectedEvent.status === "processed" ? "Success" : selectedEvent.status === "failed" ? "Failure" : selectedEvent.status} />
+                  <SafeDetail label="Error category" value={getAdminErrorCategory(selectedEvent.error_message)} />
+                </div>
+                {selectedEvent.payload && Object.keys(selectedEvent.payload).some((key) => safeWebhookPayloadFields.has(key)) ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Backend-projected provider evidence</div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {Object.entries(selectedEvent.payload).filter(([key]) => safeWebhookPayloadFields.has(key)).map(([key, value]) => (
+                        <SafeDetail
+                          key={key}
+                          label={key.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
+                          value={displayWebhookValue(key, value)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+                  Historical execution evidence displayed from the backend webhook record. This view does not claim the original provider operation was initiated from this page.
                 </div>
               </div>
             ) : (
               <div className="rounded-3xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500">
-                Select a webhook event to inspect the provider payload.
+                Select a webhook event to inspect its safe operational summary.
               </div>
             )}
           </CardContent>
@@ -451,6 +505,10 @@ function SignalCard({ icon: Icon, title, value }: { icon: typeof Building2; titl
       <div className="mt-1 text-2xl font-semibold text-slate-950">{value}</div>
     </div>
   );
+}
+
+function SafeDetail({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 break-words text-sm font-semibold text-slate-950">{value}</div></div>;
 }
 
 export default AdminProviderOperations;

@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowRightLeft, Building2, ExternalLink, Shield, Users } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
 import { getProviderDisplayCode, getProviderDisplayName, PUBLIC_PROVIDER_NAME } from "@/lib/providerDisplay";
@@ -78,6 +79,17 @@ const emptyReviewForm: ReviewFormState = {
   linkUrl: "",
   linkLabel: "",
 };
+
+const niumReviewPath = [
+  { step: "1", title: "Customer / KYC/KYB", detail: "Applicant, documents, owners, and review state", to: "/admin/kyc-reviews" },
+  { step: "2", title: "Corporate RFI", detail: "Requested data, reviewed response, and reconciliation", to: "/admin/rfi-cases" },
+  { step: "3", title: "Compliance CLEAR", detail: "Backend-authoritative resolved state", to: "/admin/provider-accounts" },
+  { step: "4", title: "Provider Account / VAN", detail: "Masked virtual-account assignment evidence", to: "/admin/provider-operations" },
+  { step: "5", title: "Wallet Funding", detail: "Processed funding webhook evidence", to: "/admin/provider-operations" },
+  { step: "6", title: "Transfer / Payout", detail: "Submission, provider reference, and completion", to: "/admin/transactions" },
+  { step: "7", title: "Transaction RFI", detail: "Provider status and human-reviewed response", to: "/admin/rfi-cases" },
+  { step: "8", title: "Reconciliation", detail: "Transactions, wallet, and ledger posting", to: "/admin/ledger" },
+] as const;
 
 const AdminDashboard = () => {
   const { token, user } = useAuth();
@@ -239,30 +251,35 @@ const AdminDashboard = () => {
       title: "Admin session",
       value: user?.roles?.length ? `${user.roles.length} role${user.roles.length > 1 ? "s" : ""}` : "Authenticated",
       description: "Your admin session is active and ready for operational work.",
+      scope: "Current session",
       icon: Shield,
     },
     {
-      title: "Users",
+      title: "User records",
       value: usersPage?.total ?? 0,
-      description: "Customer accounts currently available for review in the backoffice.",
+      description: "Total reported by the current users API response.",
+      scope: "Backend API total",
       icon: Users,
     },
     {
-      title: "Providers",
+      title: "Active providers",
       value: activeProviders.length,
-      description: "Integration partners currently active in the workspace.",
+      description: "Active provider records in the currently loaded API page.",
+      scope: "Current page count",
       icon: Building2,
     },
     {
-      title: "Transfers",
+      title: "Transfer records",
       value: transfersPage?.total ?? 0,
-      description: "Payout activity available for approval, sync, and follow-up.",
+      description: "Total reported by the current transfers API response.",
+      scope: "Backend API total",
       icon: ArrowRightLeft,
     },
     {
-      title: "Pending requests",
+      title: "Pending requests found",
       value: pendingRequests.length,
-      description: "Provider connection requests waiting for an admin review.",
+      description: "Pending requests found while checking the loaded user records.",
+      scope: "Loaded records only",
       icon: AlertCircle,
     },
   ];
@@ -295,7 +312,7 @@ const AdminDashboard = () => {
             </Badge>
             <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Operations overview</h2>
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-300">
-              A quick snapshot of user activity, providers, and transfers across the admin workspace.
+              A scoped snapshot using backend totals where supplied and loaded-record counts everywhere else.
             </p>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -306,6 +323,7 @@ const AdminDashboard = () => {
                   </div>
                   <div className="mt-4 text-sm text-slate-400">{card.title}</div>
                   <div className="mt-1 text-2xl font-semibold text-white">{card.value}</div>
+                  <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">{card.scope}</div>
                   <div className="mt-2 text-sm leading-6 text-slate-300">{card.description}</div>
                 </div>
               ))}
@@ -314,8 +332,26 @@ const AdminDashboard = () => {
 
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader>
-              <CardTitle>Recent users</CardTitle>
-              <CardDescription>The latest customer accounts visible in the workspace.</CardDescription>
+              <CardTitle>NIUM Sandbox review path</CardTitle>
+              <CardDescription>Navigate the validated workflow using backend-authoritative records. Historical provider execution is presented as evidence, not as UI-originated activity.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              {niumReviewPath.map((item) => (
+                <Link key={`${item.step}-${item.title}`} to={item.to} className="group flex items-start gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 transition hover:border-emerald-300 hover:bg-emerald-50">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white group-hover:bg-emerald-500 group-hover:text-slate-950">{item.step}</div>
+                  <div>
+                    <div className="font-semibold text-slate-950">{item.title}</div>
+                    <div className="mt-1 text-sm leading-5 text-slate-600">{item.detail}</div>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+            <CardHeader>
+              <CardTitle>Loaded user records</CardTitle>
+              <CardDescription>Up to four records from the currently loaded users API page; no ordering is inferred.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               {recentUsers.length ? (
@@ -332,7 +368,7 @@ const AdminDashboard = () => {
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-sm leading-6 text-slate-500 md:col-span-2">
-                  {usersQuery.isLoading ? "Loading users..." : "No users are available right now."}
+                  {usersQuery.isLoading ? "Loading users..." : "No user records are present in the loaded page."}
                 </div>
               )}
             </CardContent>
@@ -344,7 +380,7 @@ const AdminDashboard = () => {
             <CardHeader>
               <CardTitle>Pending integration requests</CardTitle>
               <CardDescription>
-                Click a request to review it and confirm account setup without leaving the dashboard.
+                Up to five pending requests found within the currently loaded user records.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -382,7 +418,7 @@ const AdminDashboard = () => {
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-sm leading-6 text-slate-500">
-                  {pendingRequestsLoading ? "Loading integration requests..." : "No pending integration requests are visible right now."}
+                  {pendingRequestsLoading ? "Loading integration requests..." : "No pending integration requests were found in the loaded user records."}
                 </div>
               )}
             </CardContent>
@@ -420,8 +456,8 @@ const AdminDashboard = () => {
 
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader>
-              <CardTitle>Recent transfers</CardTitle>
-              <CardDescription>The latest activity currently visible to your admin team.</CardDescription>
+              <CardTitle>Loaded transfer records</CardTitle>
+              <CardDescription>Up to four records from the currently loaded transfers API page; no ordering is inferred.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {recentTransfers.length ? (
@@ -441,7 +477,7 @@ const AdminDashboard = () => {
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-sm leading-6 text-slate-500">
-                  {transfersQuery.isLoading ? "Loading transfers..." : "No transfers are available right now."}
+                  {transfersQuery.isLoading ? "Loading transfers..." : "No transfer records are present in the loaded page."}
                 </div>
               )}
             </CardContent>

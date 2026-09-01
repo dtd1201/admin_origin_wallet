@@ -11,15 +11,21 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminNotFound from "@/pages/admin/AdminNotFound";
 import AdminContactSubmissions from "@/pages/admin/AdminContactSubmissions";
+import AdminComplianceEvents from "@/pages/admin/AdminComplianceEvents";
+import AdminRfiCases from "@/pages/admin/AdminRfiCases";
 import AdminProviders from "@/pages/admin/AdminProviders";
 import AdminProviderOperations from "@/pages/admin/AdminProviderOperations";
+import AdminProviderAccounts from "@/pages/admin/AdminProviderAccounts";
 import AdminExchangeRates from "@/pages/admin/AdminExchangeRates";
 import AdminFxOrders from "@/pages/admin/AdminFxOrders";
 import AdminKycReviews from "@/pages/admin/AdminKycReviews";
 import AdminLedger from "@/pages/admin/AdminLedger";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminTransactions from "@/pages/admin/AdminTransactions";
+import AdminTransactionRecords from "@/pages/admin/AdminTransactionRecords";
 import AdminUsers from "@/pages/admin/AdminUsers";
+import AdminBankAccounts from "@/pages/admin/AdminBankAccounts";
+import AdminBeneficiaries from "@/pages/admin/AdminBeneficiaries";
 
 const queryClient = new QueryClient();
 
@@ -40,11 +46,17 @@ const App = () => {
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="providers" element={<AdminProviders />} />
                   <Route path="provider-operations" element={<AdminProviderOperations />} />
+                  <Route path="provider-accounts" element={<AdminProviderAccounts />} />
+                  <Route path="bank-accounts" element={<AdminBankAccounts />} />
+                  <Route path="beneficiaries" element={<AdminBeneficiaries />} />
                   <Route path="kyc-reviews" element={<AdminKycReviews />} />
+                  <Route path="compliance" element={<AdminComplianceEvents />} />
+                  <Route path="rfi-cases" element={<AdminRfiCases />} />
                   <Route path="exchange-rates" element={<AdminExchangeRates mode="provider" />} />
                   <Route path="customer-rates" element={<AdminExchangeRates mode="customer" />} />
                   <Route path="fx-orders" element={<AdminFxOrders />} />
                   <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="transaction-records" element={<AdminTransactionRecords />} />
                   <Route path="ledger" element={<AdminLedger />} />
                   <Route path="audit-logs" element={<AdminAuditLogs />} />
                   <Route path="contact-submissions" element={<AdminContactSubmissions />} />

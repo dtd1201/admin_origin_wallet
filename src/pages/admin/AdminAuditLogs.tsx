@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { buildSafeAuditSummary, getAdminErrorCategory, maskAdminIdentifier } from "@/lib/adminDataSafety";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -29,14 +30,6 @@ const formatDate = (value?: string | null) => {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(parsed);
-};
-
-const formatJsonPreview = (value?: Record<string, unknown> | null) => {
-  if (!value || Object.keys(value).length === 0) {
-    return "-";
-  }
-
-  return JSON.stringify(value, null, 2);
 };
 
 const entityOptions = [
@@ -137,7 +130,7 @@ const AdminAuditLogs = () => {
           <CardContent className="space-y-5">
             {auditLogsQuery.isError && (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {auditLogsQuery.error instanceof Error ? auditLogsQuery.error.message : "Unable to load audit logs."}
+                Unable to load audit logs. Error category: {getAdminErrorCategory(auditLogsQuery.error instanceof Error ? auditLogsQuery.error.message : null)}.
               </div>
             )}
 
@@ -150,7 +143,7 @@ const AdminAuditLogs = () => {
                       <TableHead>Actor</TableHead>
                       <TableHead>Action</TableHead>
                       <TableHead>Entity</TableHead>
-                      <TableHead>Network</TableHead>
+                      <TableHead>Reference</TableHead>
                       <TableHead className="text-right">Detail</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -160,7 +153,7 @@ const AdminAuditLogs = () => {
                         <TableRow key={row.id} className={selectedLog?.id === row.id ? "bg-emerald-50/70" : undefined}>
                           <TableCell>
                             <div className="font-medium text-slate-900">{formatDate(row.created_at)}</div>
-                            <div className="text-xs text-slate-500">#{row.id}</div>
+                            <div className="text-xs text-slate-500">{maskAdminIdentifier(row.id)}</div>
                           </TableCell>
                           <TableCell>
                             <div className="break-all font-medium text-slate-900">
@@ -173,10 +166,10 @@ const AdminAuditLogs = () => {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium text-slate-900">{row.entity_type}</div>
-                            <div className="text-xs text-slate-500">{row.entity_id ?? "-"}</div>
+                            <div className="text-xs text-slate-500">{maskAdminIdentifier(row.entity_id)}</div>
                           </TableCell>
                           <TableCell>
-                            <div className="break-all text-sm text-slate-700">{row.ip_address || "-"}</div>
+                            <div className="text-sm text-slate-700">{maskAdminIdentifier(row.entity_id || row.id)}</div>
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end">
@@ -241,7 +234,7 @@ const AdminAuditLogs = () => {
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader>
               <CardTitle>Selected event</CardTitle>
-              <CardDescription>Before and after payloads for the selected action.</CardDescription>
+              <CardDescription>Safe operational fields only. Raw audit payloads are never displayed.</CardDescription>
             </CardHeader>
             <CardContent>
               {selectedLog ? (
@@ -249,16 +242,19 @@ const AdminAuditLogs = () => {
                   <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                     <div className="font-semibold text-slate-950">{selectedLog.action}</div>
                     <div className="mt-1 text-sm text-slate-600">
-                      {selectedLog.entity_type} {selectedLog.entity_id ?? ""}
+                      {selectedLog.entity_type} {maskAdminIdentifier(selectedLog.entity_id)}
                     </div>
                   </div>
-                  <AuditJsonBlock title="Before" value={selectedLog.before} />
-                  <AuditJsonBlock title="After" value={selectedLog.after} />
-                  <AuditJsonBlock title="Metadata" value={selectedLog.metadata} />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {buildSafeAuditSummary(selectedLog.before, selectedLog.after, selectedLog.metadata).map((item, index) => (
+                      <AuditSummaryItem key={`${item.label}-${index}`} label={item.label} value={item.value} />
+                    ))}
+                    <AuditSummaryItem label="Timestamp" value={formatDate(selectedLog.created_at)} />
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-3xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500">
-                  Select an audit log to inspect payload details.
+                  Select an audit log to inspect its safe operational summary.
                 </div>
               )}
             </CardContent>
@@ -269,15 +265,8 @@ const AdminAuditLogs = () => {
   );
 };
 
-function AuditJsonBlock({ title, value }: { title: string; value?: Record<string, unknown> | null }) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-slate-100">
-      <div className="font-semibold">{title}</div>
-      <pre className="mt-3 max-h-60 overflow-auto whitespace-pre-wrap text-xs leading-5 text-slate-300">
-        {formatJsonPreview(value)}
-      </pre>
-    </div>
-  );
+function AuditSummaryItem({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 break-words text-sm font-semibold text-slate-950">{value}</div></div>;
 }
 
 export default AdminAuditLogs;

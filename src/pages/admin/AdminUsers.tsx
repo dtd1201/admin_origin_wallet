@@ -50,13 +50,12 @@ type IntegrationLinkForm = {
   request_note?: string | null;
 };
 
-type UserFormState = {
+export type UserFormState = {
   email: string;
   phone: string;
   full_name: string;
   password: string;
   status: "active" | "pending" | "suspended";
-  kyc_status: "pending" | "approved" | "rejected";
   integration_links: IntegrationLinkForm[];
 };
 
@@ -66,7 +65,6 @@ const emptyUserForm: UserFormState = {
   full_name: "",
   password: "",
   status: "active",
-  kyc_status: "pending",
   integration_links: [],
 };
 
@@ -119,6 +117,22 @@ const buildIntegrationLinksPayload = (links: IntegrationLinkForm[]) => {
     }))
     .filter((link) => link.enabled && link.link_url);
 };
+
+export const buildUserCreatePayload = (payload: UserFormState) => ({
+  email: payload.email.trim(),
+  phone: payload.phone.trim(),
+  full_name: payload.full_name.trim(),
+  password: payload.password,
+  status: payload.status,
+  integration_links: buildIntegrationLinksPayload(payload.integration_links),
+});
+
+export const buildUserUpdatePayload = (payload: UserFormState) => ({
+  full_name: payload.full_name.trim(),
+  status: payload.status,
+  ...(payload.password.trim() ? { password: payload.password } : {}),
+  integration_links: buildIntegrationLinksPayload(payload.integration_links),
+});
 
 const reviewableKycStatuses = new Set(["submitted", "under_review", "needs_more_info"]);
 
@@ -273,12 +287,6 @@ const AdminUsers = () => {
             : userDetailQuery.data.status === "pending"
               ? "pending"
               : "active",
-        kyc_status:
-          userDetailQuery.data.kyc_status === "approved"
-            ? "approved"
-            : userDetailQuery.data.kyc_status === "rejected"
-              ? "rejected"
-              : "pending",
         integration_links: normalizeIntegrationSlots(userIntegrationLinksQuery.data.data),
       });
       setFormError("");
@@ -318,15 +326,7 @@ const AdminUsers = () => {
       requestApi<AdminUser>(adminEndpointConfig.users, {
         method: "POST",
         token,
-        body: {
-          email: payload.email.trim(),
-          phone: payload.phone.trim(),
-          full_name: payload.full_name.trim(),
-          password: payload.password,
-          status: payload.status,
-          kyc_status: payload.kyc_status,
-          integration_links: buildIntegrationLinksPayload(payload.integration_links),
-        },
+        body: buildUserCreatePayload(payload),
       }),
     onSuccess: async () => {
       await invalidateUsers();
@@ -345,12 +345,7 @@ const AdminUsers = () => {
       requestApi<AdminUserDetail>(`${adminEndpointConfig.users}/${userId}`, {
         method: "PUT",
         token,
-        body: {
-          full_name: payload.full_name.trim(),
-          status: payload.status,
-          ...(payload.password.trim() ? { password: payload.password } : {}),
-          integration_links: buildIntegrationLinksPayload(payload.integration_links),
-        },
+        body: buildUserUpdatePayload(payload),
       }),
     onSuccess: async () => {
       await invalidateUsers();
@@ -502,7 +497,7 @@ const AdminUsers = () => {
                 </div>
               </div>
               <Button asChild className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700">
-                <Link to="/admin/kyc">Review KYC/KYB</Link>
+                <Link to="/admin/kyc-reviews">Review KYC/KYB</Link>
               </Button>
             </div>
           ) : null}
@@ -787,25 +782,9 @@ const AdminUsers = () => {
                   </Select>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label>KYC status</Label>
-                  <Select
-                    value={formState.kyc_status}
-                    disabled={dialogMode === "edit"}
-                    onValueChange={(value: "pending" | "approved" | "rejected") =>
-                      setFormState((current) => ({ ...current, kyc_status: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select KYC status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {dialogMode === "edit" && userDetailQuery.data ? (
+                  <UserKycWorkflowBoundary userId={userDetailQuery.data.id} status={userDetailQuery.data.kyc_status} />
+                ) : null}
               </div>
 
               <div className="space-y-4">
@@ -936,5 +915,18 @@ const AdminUsers = () => {
     </div>
   );
 };
+
+export const UserKycWorkflowBoundary = ({ userId, status }: { userId: number; status?: string | null }) => (
+  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">KYC status</div>
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+      <Badge variant="outline">{formatAdminStatus(status)}</Badge>
+      <Button asChild type="button" variant="outline" size="sm">
+        <Link to={`/admin/kyc-reviews?user_id=${userId}`}>Open KYC review</Link>
+      </Button>
+    </div>
+    <p className="mt-2 text-xs text-slate-500">KYC decisions are managed only in the dedicated review workflow.</p>
+  </div>
+);
 
 export default AdminUsers;

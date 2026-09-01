@@ -31,6 +31,29 @@ export interface ProviderSummary {
   supports_webhooks?: boolean;
 }
 
+export interface AdminBankAccount {
+  id: number;
+  user_id: number;
+  provider_id?: number | null;
+  currency: string;
+  status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminBeneficiary {
+  id: number;
+  user_id: number;
+  provider_id?: number | null;
+  external_beneficiary_id?: string | null;
+  full_name?: string | null;
+  company_name?: string | null;
+  currency: string;
+  status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface AdminProviderHealth {
   id?: number;
   provider_id?: number;
@@ -61,6 +84,88 @@ export interface AdminProviderWebhookEvent {
   next_retry_at?: string | null;
   error_message?: string | null;
   payload?: Record<string, unknown> | null;
+}
+
+export type AdminComplianceReviewStatus = "pending" | "resolved" | "ignored" | "not_required";
+
+export type AdminComplianceMatchStatus =
+  | "unmatched"
+  | "matched_customer"
+  | "matched_transfer"
+  | "matched_transaction";
+
+export interface AdminComplianceEvent {
+  id: number;
+  event_id?: string | null;
+  request_id?: string | null;
+  reference?: string | null;
+  customer_reference?: string | null;
+  event_type?: string | null;
+  compliance_status?: string | null;
+  match_status: AdminComplianceMatchStatus;
+  review_status: AdminComplianceReviewStatus;
+  requires_action: boolean;
+  processing_status: string;
+  duplicate_count: number;
+  provider?: ProviderSummary | null;
+  user_id?: number | null;
+  transfer_id?: number | null;
+  transaction_id?: number | null;
+  received_at?: string | null;
+  last_received_at?: string | null;
+  processed_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: number | null;
+  resolution_note?: string | null;
+  error_message?: string | null;
+}
+
+export interface AdminComplianceReviewRequest {
+  status: "resolved" | "ignored";
+  resolution_note: string;
+}
+
+export interface AdminComplianceReviewResponse {
+  message: string;
+  event: AdminComplianceEvent;
+}
+
+export type AdminRfiScope = "customer" | "transaction";
+
+export type AdminRfiSubmissionState =
+  | "not_claimed"
+  | "draft"
+  | "approved"
+  | "claimed"
+  | "responded"
+  | "reconciled";
+
+export interface AdminRfiCase {
+  id: number;
+  scope: AdminRfiScope;
+  status: string;
+  contract_gate: string;
+  submission_state: AdminRfiSubmissionState;
+  approved_at?: string | null;
+  claimed_at?: string | null;
+  reconciled_at?: string | null;
+  evidence?: Record<string, unknown> | null;
+  response_draft?: Array<{
+    questionId?: string;
+    answer?: unknown;
+    provenance?: {
+      source?: string;
+      reviewer_id?: number | null;
+      recorded_at?: string | null;
+    } | null;
+  }> | null;
+  supporting_file_count?: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminRfiDraftRequest {
+  answers: Array<{ questionId: string; answer: string }>;
 }
 
 export interface ManagedExchangeRate {
@@ -206,16 +311,24 @@ export interface AdminKycRequirement {
 
 export interface AdminAmlMatch {
   id: number;
+  aml_screening_id?: number;
   list_type: string;
   source: string;
   matched_name: string;
   score?: string | number | null;
   country_code?: string | null;
+  date_of_birth?: string | null;
   status: string;
+  resolved_by_user_id?: number | null;
+  resolved_by?: AdminUser | null;
+  resolved_at?: string | null;
+  resolution_note?: string | null;
 }
 
 export interface AdminAmlScreening {
   id: number;
+  user_id?: number;
+  kyc_profile_id?: number;
   subject_name: string;
   subject_role: string;
   screening_provider: string;
@@ -223,8 +336,12 @@ export interface AdminAmlScreening {
   risk_level?: string | null;
   risk_score?: string | number | null;
   screened_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: AdminUser | null;
   review_note?: string | null;
   matches?: AdminAmlMatch[];
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface AdminKycProfile {
@@ -268,6 +385,76 @@ export interface AdminKycReviewResponse {
   kyc_submission?: AdminKycProfile;
 }
 
+export interface AdminKycDetailResponse {
+  user: AdminUser;
+  kyc_profile: AdminKycProfile | null;
+  kyc_submission: AdminKycProfile | null;
+}
+
+export type AdminKycProviderSubmissionStatus = "pending" | "approved" | "submitted" | "rejected" | "failed";
+
+export interface AdminKycProviderAccount {
+  id: number;
+  user_id: number;
+  provider_id: number;
+  status: string;
+  provider_status?: string | null;
+  provider_sub_status?: string | null;
+  compliance_status?: string | null;
+  rfi_status?: string | null;
+  transactions_last_synced_at?: string | null;
+  provider_status_updated_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminKycProviderSubmission {
+  id: number;
+  user_id: number;
+  kyc_profile_id?: number | null;
+  provider_id: number;
+  provider_account_id?: number | null;
+  status: AdminKycProviderSubmissionStatus;
+  reviewed_by_user_id?: number | null;
+  reviewed_at?: string | null;
+  approved_at?: string | null;
+  submitted_at?: string | null;
+  rejected_at?: string | null;
+  review_note?: string | null;
+  rejection_reason?: string | null;
+  failure_reason?: string | null;
+  user?: AdminUser | null;
+  kyc_profile?: AdminKycProfile | null;
+  provider?: ProviderSummary | null;
+  provider_account?: AdminKycProviderAccount | null;
+  reviewed_by?: AdminUser | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AdminKycProviderSubmissionsResponse {
+  user: AdminUser;
+  data: AdminKycProviderSubmission[];
+}
+
+export interface AdminKycProviderReviewResponse {
+  message: string;
+  provider: ProviderSummary;
+  kyc_provider_submission: AdminKycProviderSubmission;
+}
+
+export interface AdminProviderAccountSyncResponse {
+  message?: string;
+  provider: ProviderSummary;
+  user_id: number;
+  provider_account: AdminKycProviderAccount;
+}
+
+export interface AdminAmlReviewResponse {
+  message: string;
+  aml_screening: AdminAmlScreening;
+}
+
 export interface AdminOnboarding {
   profile_completed: boolean;
   selected_provider_code: string | null;
@@ -294,18 +481,26 @@ export interface AdminAuthChallenge {
 
 export interface AdminTransaction {
   id: number;
-  transfer_no?: string;
   user_id: number;
   provider_id: number;
-  source_currency?: string;
-  target_currency?: string;
-  source_amount?: string;
-  target_amount?: string;
-  fee_amount?: string;
-  status: string;
-  submitted_at?: string | null;
-  completed_at?: string | null;
+  bank_account_id?: number | null;
+  transfer_id?: number | null;
+  external_transaction_id: string;
+  transaction_type?: string | null;
+  direction?: string | null;
+  currency: string;
+  amount: string | number;
+  fee_amount?: string | number | null;
+  description?: string | null;
+  reference_text?: string | null;
+  status?: string | null;
+  booked_at?: string | null;
+  value_date?: string | null;
+  compliance_review_required: boolean;
+  compliance_status?: string | null;
+  compliance_reviewed_at?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface AdminTransferApproval {
@@ -325,6 +520,14 @@ export interface AdminTransfer {
   provider_id: number;
   user?: AdminUser | null;
   provider?: ProviderSummary | null;
+  beneficiary?: {
+    full_name?: string | null;
+    company_name?: string | null;
+    country_code?: string | null;
+    currency?: string | null;
+    bank_name?: string | null;
+    status?: string | null;
+  } | null;
   beneficiary_id?: number | null;
   external_transfer_id?: string | null;
   external_payment_id?: string | null;
@@ -335,10 +538,12 @@ export interface AdminTransfer {
   target_amount?: string | number | null;
   fee_amount?: string | number | null;
   status: string;
+  provider_status?: string | null;
   failure_code?: string | null;
   failure_reason?: string | null;
   submitted_at?: string | null;
   completed_at?: string | null;
+  provider_status_at?: string | null;
   created_at?: string | null;
   approvals?: AdminTransferApproval[];
 }
@@ -355,7 +560,7 @@ export interface AdminWalletAccount {
   available_balance: string | number;
   ledger_balance?: string | number | null;
   hold_balance?: string | number | null;
-  status: "active" | "frozen" | "closed" | "pending" | string;
+  status: "active";
   last_reconciled_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;

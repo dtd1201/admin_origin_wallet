@@ -1,12 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { adminEndpointConfig, buildApiUrl, requestApi, type PaginatedResponse } from "@/lib/api";
+import {
+  adminEndpointConfig,
+  approveAdminKycProviderSubmission,
+  buildApiUrl,
+  clearAdminAmlScreening,
+  confirmAdminAmlMatch,
+  getAdminAmlScreenings,
+  getAdminKycProfile,
+  getAdminKycProviderSubmissions,
+  rejectAdminKycProviderSubmission,
+  requestApi,
+  type PaginatedResponse,
+} from "@/lib/api";
 import type {
   AdminAmlScreening,
   AdminKycDocument,
   AdminKycProfile,
+  AdminKycProviderSubmission,
   AdminKycRelatedPerson,
   AdminKycRequirement,
   AdminKycReviewResponse,
@@ -35,11 +48,13 @@ import { Textarea } from "@/components/ui/textarea";
 
 const statusOptions = [
   { value: "all", label: "All statuses" },
+  { value: "draft", label: "Draft" },
   { value: "submitted", label: "Submitted" },
   { value: "under_review", label: "Under review" },
   { value: "needs_more_info", label: "Needs more info" },
   { value: "verified", label: "Verified" },
   { value: "rejected", label: "Rejected" },
+  { value: "expired", label: "Expired" },
 ] as const;
 
 const statusClassName = (status: string) => {
@@ -84,23 +99,23 @@ const formatPercent = (value?: string | number | null) => {
 const formatMetadataValue = (value: unknown): string => {
   if (value === null || value === undefined || value === "") return "-";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "-";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return "-";
 
   return String(value);
 };
 
-const formatMetadataLabel = (key: string) =>
-  key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const maskSensitiveValue = (value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized) return "-";
+  if (normalized.length <= 4) return "*".repeat(normalized.length);
+  return `${"*".repeat(Math.min(8, normalized.length - 4))}${normalized.slice(-4)}`;
+};
 
 const getProfileName = (profile: AdminKycProfile) =>
   profile.applicant_type === "business" ? profile.business_name || profile.legal_name : profile.legal_name;
 
-const getOpenRequirementCount = (profile: AdminKycProfile) =>
-  profile.requirements?.filter((requirement) =>
-    ["required", "needs_more_info", "rejected"].includes(requirement.status),
-  ).length ?? 0;
+const getRequiredRequirementCount = (profile: AdminKycProfile) =>
+  profile.requirements?.filter((requirement) => requirement.status === "required").length ?? 0;
 
 const isAmlClearForApproval = (status?: string | null) =>
   ["clear", "manual_clear"].includes(String(status ?? "").toLowerCase());
@@ -172,10 +187,14 @@ const relatedPersonUpdateTarget = (person: AdminKycRelatedPerson): UpdateRequest
 const AdminKycReviews = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]["value"]>("all");
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<AdminKycProfile | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
-  const [reviewNote, setReviewNote] = useState("");
+  const [approvalReviewNote, setApprovalReviewNote] = useState("");
+  const [rejectionReviewNote, setRejectionReviewNote] = useState("");
+  const [updateReviewNote, setUpdateReviewNote] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [reviewError, setReviewError] = useState("");
@@ -183,61 +202,80 @@ const AdminKycReviews = () => {
   const [updateRequestDialogOpen, setUpdateRequestDialogOpen] = useState(false);
   const [updateRequestTarget, setUpdateRequestTarget] = useState<UpdateRequestTarget | null>(null);
   const [updateRequestReason, setUpdateRequestReason] = useState("");
+  const [selectedProviderSubmission, setSelectedProviderSubmission] = useState<AdminKycProviderSubmission | null>(null);
+  const [providerAction, setProviderAction] = useState<"approve" | "reject" | null>(null);
+  const [providerReviewNote, setProviderReviewNote] = useState("");
+  const [providerRejectionReason, setProviderRejectionReason] = useState("");
+  const [providerActionError, setProviderActionError] = useState("");
+  const [selectedAmlScreening, setSelectedAmlScreening] = useState<AdminAmlScreening | null>(null);
+  const [amlAction, setAmlAction] = useState<"confirm" | "clear" | null>(null);
+  const [amlReviewNote, setAmlReviewNote] = useState("");
+  const [amlActionError, setAmlActionError] = useState("");
 
   const queryPath = useMemo(() => {
-    if (statusFilter === "all") {
-      return adminEndpointConfig.kycProfiles;
-    }
+    const params = new URLSearchParams({ page: String(page) });
+    if (statusFilter !== "all") params.set("status", statusFilter);
 
-    return `${adminEndpointConfig.kycProfiles}?status=${statusFilter}`;
-  }, [statusFilter]);
+    return `${adminEndpointConfig.kycProfiles}?${params.toString()}`;
+  }, [page, statusFilter]);
 
   const profilesQuery = useQuery({
-    queryKey: ["admin", "kyc-profiles", statusFilter, token],
+    queryKey: ["admin", "kyc-profiles", statusFilter, page, token],
     enabled: !!token,
     queryFn: async () => requestApi<PaginatedResponse<AdminKycProfile>>(queryPath, { method: "GET", token }),
   });
 
+  const profileDetailQuery = useQuery({
+    queryKey: ["admin", "kyc-profile-detail", selectedUserId, token],
+    enabled: !!token && reviewDialogOpen && selectedUserId !== null,
+    queryFn: () => getAdminKycProfile(selectedUserId as number, token),
+  });
+
+  const providerSubmissionsQuery = useQuery({
+    queryKey: ["admin", "kyc-provider-submissions", selectedUserId, token],
+    enabled: !!token && reviewDialogOpen && selectedUserId !== null,
+    queryFn: () => getAdminKycProviderSubmissions(selectedUserId as number, token),
+  });
+
+  const amlScreeningsQuery = useQuery({
+    queryKey: ["admin", "aml-screenings", selectedUserId, token],
+    enabled: !!token && reviewDialogOpen && selectedUserId !== null,
+    queryFn: () => getAdminAmlScreenings(selectedUserId as number, token),
+  });
+
   const rows = useMemo(() => profilesQuery.data?.data ?? [], [profilesQuery.data?.data]);
-  const selectedProfileId = selectedProfile?.id ?? null;
-  const selectedProfileReviewNote = selectedProfile?.review_note ?? "";
+  const canGoBack = (profilesQuery.data?.current_page ?? page) > 1;
+  const canGoNext = (profilesQuery.data?.current_page ?? page) < (profilesQuery.data?.last_page ?? page);
+  useEffect(() => {
+    if (profileDetailQuery.data) setSelectedProfile(profileDetailQuery.data.kyc_profile);
+  }, [profileDetailQuery.data]);
 
   useEffect(() => {
-    if (!selectedProfileId) {
-      return;
-    }
-
-    if (rows.length === 0) {
-      setSelectedProfile(null);
-      setReviewDialogOpen(false);
-      return;
-    }
-
-    const latestProfile = rows.find((row) => row.id === selectedProfileId);
-    if (latestProfile) {
-      setSelectedProfile(latestProfile);
-      return;
-    }
-
-    setSelectedProfile(null);
-    setReviewDialogOpen(false);
-  }, [rows, selectedProfileId]);
-
-  useEffect(() => {
-    setReviewNote(selectedProfileReviewNote);
+    setApprovalReviewNote("");
+    setRejectionReviewNote("");
+    setUpdateReviewNote("");
     setRejectionReason("");
     setReviewError("");
     setDocumentError("");
     setUpdateRequestTarget(null);
     setUpdateRequestReason("");
     setUpdateRequestDialogOpen(false);
-  }, [selectedProfileId, selectedProfileReviewNote]);
+    setSelectedProviderSubmission(null);
+    setProviderAction(null);
+    setProviderReviewNote("");
+    setProviderRejectionReason("");
+    setProviderActionError("");
+    setSelectedAmlScreening(null);
+    setAmlAction(null);
+    setAmlReviewNote("");
+    setAmlActionError("");
+  }, [selectedProfile?.id]);
 
   const stats = useMemo(
     () => [
       { label: "Total profiles", value: profilesQuery.data?.total ?? 0 },
       { label: "Submitted", value: rows.filter((row) => row.status === "submitted").length },
-      { label: "Open requirements", value: rows.reduce((total, row) => total + getOpenRequirementCount(row), 0) },
+      { label: "Required items", value: rows.reduce((total, row) => total + getRequiredRequirementCount(row), 0) },
     ],
     [profilesQuery.data?.total, rows],
   );
@@ -275,15 +313,19 @@ const AdminKycReviews = () => {
     await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-profiles"] });
   };
 
+  const invalidateSelectedKycProfile = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-profile-detail", selectedUserId] });
+  };
+
   const approveMutation = useMutation({
     mutationFn: async (profile: AdminKycProfile) =>
       requestApi<AdminKycReviewResponse>(`/admin/users/${profile.user_id}/kyc-profile/approve`, {
         method: "POST",
         token,
-        body: { review_note: reviewNote.trim() || null },
+        body: { review_note: approvalReviewNote.trim() || null },
       }),
     onSuccess: async (response) => {
-      await invalidateKycProfiles();
+      await Promise.all([invalidateKycProfiles(), invalidateSelectedKycProfile()]);
       setSelectedProfile(response.kyc_profile);
       setReviewError("");
     },
@@ -299,14 +341,15 @@ const AdminKycReviews = () => {
         token,
         body: {
           rejection_reason: rejectionReason.trim(),
-          review_note: reviewNote.trim() || null,
+          review_note: rejectionReviewNote.trim() || null,
         },
       }),
     onSuccess: async (response) => {
-      await invalidateKycProfiles();
+      await Promise.all([invalidateKycProfiles(), invalidateSelectedKycProfile()]);
       setSelectedProfile(response.kyc_profile);
       setRejectDialogOpen(false);
       setRejectionReason("");
+      setRejectionReviewNote("");
       setReviewError("");
     },
     onError: (error) => {
@@ -324,7 +367,11 @@ const AdminKycReviews = () => {
         },
       ),
     onSuccess: async () => {
-      await invalidateKycProfiles();
+      await Promise.all([
+        invalidateKycProfiles(),
+        invalidateSelectedKycProfile(),
+        queryClient.invalidateQueries({ queryKey: ["admin", "aml-screenings", selectedUserId] }),
+      ]);
       setReviewError("");
     },
     onError: (error) => {
@@ -332,32 +379,42 @@ const AdminKycReviews = () => {
     },
   });
 
-  const amlClearMutation = useMutation({
-    mutationFn: async (screening: AdminAmlScreening) =>
-      requestApi<{ message?: string; aml_screening: AdminAmlScreening }>(
-        `/admin/aml-screenings/${screening.id}/clear`,
-        {
-          method: "POST",
-          token,
-          body: { review_note: reviewNote.trim() || null },
-        },
-      ),
-    onSuccess: async (response) => {
-      setSelectedProfile((current) => {
-        if (!current) return current;
+  const closeAmlAction = () => {
+    setAmlAction(null);
+    setSelectedAmlScreening(null);
+    setAmlReviewNote("");
+    setAmlActionError("");
+  };
 
-        return {
-          ...current,
-          aml_screenings: current.aml_screenings?.map((screening) =>
-            screening.id === response.aml_screening.id ? response.aml_screening : screening,
-          ),
-        };
-      });
-      await invalidateKycProfiles();
-      setReviewError("");
+  const refreshAmlData = async () => {
+    await Promise.all([
+      invalidateKycProfiles(),
+      invalidateSelectedKycProfile(),
+      queryClient.invalidateQueries({ queryKey: ["admin", "aml-screenings", selectedUserId] }),
+    ]);
+  };
+
+  const amlClearMutation = useMutation({
+    mutationFn: (screening: AdminAmlScreening) =>
+      clearAdminAmlScreening(screening.id, amlReviewNote.trim() || null, token),
+    onSuccess: async () => {
+      closeAmlAction();
+      await refreshAmlData();
     },
     onError: (error) => {
-      setReviewError(error instanceof Error ? error.message : "Unable to manually clear AML screening.");
+      setAmlActionError(error instanceof Error ? error.message : "Unable to manually clear AML screening.");
+    },
+  });
+
+  const amlConfirmMutation = useMutation({
+    mutationFn: (screening: AdminAmlScreening) =>
+      confirmAdminAmlMatch(screening.id, amlReviewNote.trim() || null, token),
+    onSuccess: async () => {
+      closeAmlAction();
+      await refreshAmlData();
+    },
+    onError: (error) => {
+      setAmlActionError(error instanceof Error ? error.message : "Unable to confirm AML match.");
     },
   });
 
@@ -382,20 +439,69 @@ const AdminKycReviews = () => {
           subject_type: target.subject_type ?? null,
           subject_id: target.subject_id ?? null,
           reason: reason.trim(),
-          review_note: reviewNote.trim() || null,
+          review_note: updateReviewNote.trim() || null,
           metadata: target.metadata ?? {},
         },
       }),
     onSuccess: async (response) => {
-      await invalidateKycProfiles();
+      await Promise.all([invalidateKycProfiles(), invalidateSelectedKycProfile()]);
       setSelectedProfile(response.kyc_profile);
       setUpdateRequestDialogOpen(false);
       setUpdateRequestTarget(null);
       setUpdateRequestReason("");
+      setUpdateReviewNote("");
       setReviewError("");
     },
     onError: (error) => {
       setReviewError(error instanceof Error ? error.message : "Unable to request a KYC/KYB update.");
+    },
+  });
+
+  const providerApproveMutation = useMutation({
+    mutationFn: (submission: AdminKycProviderSubmission) => {
+      if (!submission.provider?.code) throw new Error("Provider is unavailable for review.");
+
+      return approveAdminKycProviderSubmission(
+        submission.user_id,
+        submission.provider.code,
+        providerReviewNote.trim() || null,
+        token,
+      );
+    },
+    onSuccess: async () => {
+      setProviderAction(null);
+      setSelectedProviderSubmission(null);
+      setProviderReviewNote("");
+      setProviderActionError("");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-provider-submissions", selectedUserId] });
+    },
+    onError: (error) => {
+      setProviderActionError(error instanceof Error ? error.message : "Unable to approve provider submission.");
+    },
+  });
+
+  const providerRejectMutation = useMutation({
+    mutationFn: (submission: AdminKycProviderSubmission) => {
+      if (!submission.provider?.code) throw new Error("Provider is unavailable for review.");
+
+      return rejectAdminKycProviderSubmission(
+        submission.user_id,
+        submission.provider.code,
+        providerRejectionReason.trim(),
+        providerReviewNote.trim() || null,
+        token,
+      );
+    },
+    onSuccess: async () => {
+      setProviderAction(null);
+      setSelectedProviderSubmission(null);
+      setProviderRejectionReason("");
+      setProviderReviewNote("");
+      setProviderActionError("");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-provider-submissions", selectedUserId] });
+    },
+    onError: (error) => {
+      setProviderActionError(error instanceof Error ? error.message : "Unable to reject provider submission.");
     },
   });
 
@@ -406,7 +512,7 @@ const AdminKycReviews = () => {
     setUpdateRequestDialogOpen(true);
   };
 
-  const selectedOpenRequirementCount = selectedProfile ? getOpenRequirementCount(selectedProfile) : 0;
+  const selectedRequiredRequirementCount = selectedProfile ? getRequiredRequirementCount(selectedProfile) : 0;
   const selectedActiveAmlScreenings =
     selectedProfile?.aml_screenings?.filter((screening) => isActiveAmlScreening(screening.status)) ?? [];
   const selectedAmlMissing = Boolean(selectedProfile) && selectedActiveAmlScreenings.length === 0;
@@ -414,12 +520,32 @@ const AdminKycReviews = () => {
     (screening) => !isAmlClearForApproval(screening.status),
   ).length;
   const selectedAmlApprovalBlocked = selectedAmlMissing || selectedBlockingAmlCount > 0;
+  const providerApprovalCompatible =
+    Boolean(selectedProfile) &&
+    ["verified", "approved"].includes(String(selectedProfile?.status).toLowerCase()) &&
+    !selectedAmlApprovalBlocked;
   const isReviewing =
     approveMutation.isPending ||
     rejectMutation.isPending ||
     amlMutation.isPending ||
     amlClearMutation.isPending ||
+    amlConfirmMutation.isPending ||
     requestUpdateMutation.isPending;
+
+  const openProviderAction = (submission: AdminKycProviderSubmission, action: "approve" | "reject") => {
+    setSelectedProviderSubmission(submission);
+    setProviderAction(action);
+    setProviderReviewNote("");
+    setProviderRejectionReason("");
+    setProviderActionError("");
+  };
+
+  const openAmlAction = (screening: AdminAmlScreening, action: "confirm" | "clear") => {
+    setSelectedAmlScreening(screening);
+    setAmlAction(action);
+    setAmlReviewNote("");
+    setAmlActionError("");
+  };
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
@@ -432,7 +558,13 @@ const AdminKycReviews = () => {
             </CardDescription>
           </div>
           <div className="w-full max-w-xs">
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value as typeof statusFilter);
+                setPage(1);
+              }}
+            >
               <SelectTrigger className="h-11 rounded-2xl border-slate-200">
                 <SelectValue />
               </SelectTrigger>
@@ -462,6 +594,12 @@ const AdminKycReviews = () => {
             </div>
           )}
 
+          {profilesQuery.isError && (
+            <div role="alert" className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {profilesQuery.error instanceof Error ? profilesQuery.error.message : "Unable to load KYC/KYB profiles."}
+            </div>
+          )}
+
           <div className="space-y-5">
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
@@ -481,7 +619,7 @@ const AdminKycReviews = () => {
                   <TableBody>
                     {rows.length > 0 ? (
                       rows.map((profile) => {
-                        const openRequirements = getOpenRequirementCount(profile);
+                        const requiredRequirements = getRequiredRequirementCount(profile);
 
                         return (
                           <TableRow key={profile.id}>
@@ -497,8 +635,8 @@ const AdminKycReviews = () => {
                               <Badge className={statusClassName(profile.status)}>{profile.status}</Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={openRequirements > 0 ? "secondary" : "outline"}>
-                                {openRequirements} open
+                              <Badge variant={requiredRequirements > 0 ? "secondary" : "outline"}>
+                                {requiredRequirements} required
                               </Badge>
                             </TableCell>
                             <TableCell>{profile.documents?.length ?? 0}</TableCell>
@@ -508,7 +646,8 @@ const AdminKycReviews = () => {
                                 size="sm"
                                 className="bg-slate-950 text-white hover:bg-slate-800"
                                 onClick={() => {
-                                  setSelectedProfile(profile);
+                                  setSelectedUserId(profile.user_id);
+                                  setSelectedProfile(null);
                                   setReviewDialogOpen(true);
                                 }}
                               >
@@ -530,7 +669,42 @@ const AdminKycReviews = () => {
               </div>
             </div>
 
-            <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+              <div>
+                Page {profilesQuery.data?.current_page ?? page} of {profilesQuery.data?.last_page ?? 1}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canGoBack}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canGoNext}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+
+            <Dialog
+              open={reviewDialogOpen}
+              onOpenChange={(open) => {
+                setReviewDialogOpen(open);
+                if (!open) {
+                  setSelectedUserId(null);
+                  setSelectedProfile(null);
+                }
+              }}
+            >
               <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto rounded-3xl">
                 <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-xl">
@@ -542,7 +716,17 @@ const AdminKycReviews = () => {
                 </DialogDescription>
               </DialogHeader>
               <div>
-                {selectedProfile ? (
+                {profileDetailQuery.isLoading ? (
+                  <div className="rounded-3xl border border-dashed border-slate-300 py-16 text-center text-slate-500">
+                    Loading KYC/KYB detail...
+                  </div>
+                ) : profileDetailQuery.isError ? (
+                  <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {profileDetailQuery.error instanceof Error
+                      ? profileDetailQuery.error.message
+                      : "Unable to load KYC/KYB detail."}
+                  </div>
+                ) : selectedProfile ? (
                   <div className="space-y-6">
                     {reviewError && (
                       <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -595,7 +779,7 @@ const AdminKycReviews = () => {
                               label="Registration no."
                               value={selectedProfile.business_registration_number || "-"}
                             />
-                            <DetailItem label="Tax ID" value={selectedProfile.tax_id || "-"} />
+                            <DetailItem label="Tax ID" value={maskSensitiveValue(selectedProfile.tax_id)} />
                             <DetailItem label="Registered country" value={selectedProfile.registered_country_code || "-"} />
                           </>
                         )}
@@ -613,16 +797,6 @@ const AdminKycReviews = () => {
                         />
                       </div>
                     </Section>
-
-                    {selectedProfile.metadata && Object.keys(selectedProfile.metadata).length > 0 ? (
-                      <Section title="Submitted metadata">
-                        <div className="grid gap-3 text-sm md:grid-cols-2">
-                          {Object.entries(selectedProfile.metadata).map(([key, value]) => (
-                            <DetailItem key={key} label={formatMetadataLabel(key)} value={formatMetadataValue(value)} />
-                          ))}
-                        </div>
-                      </Section>
-                    ) : null}
 
                     <Section title="Requirements">
                       <div className="space-y-2">
@@ -693,8 +867,13 @@ const AdminKycReviews = () => {
                               <div>
                                 <div className="font-medium text-slate-900">{document.type}</div>
                                 <div className="mt-1 break-all text-xs text-slate-500">
-                                  {document.original_name || document.file_path || "Stored KYC evidence"}
+                                  {document.original_name || "Stored KYC evidence"}
                                 </div>
+                                {document.document_number && (
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    Document no. {maskSensitiveValue(document.document_number)}
+                                  </div>
+                                )}
                                 {document.metadata?.resubmission_requirement_key && (
                                   <div className="mt-1 text-xs font-medium text-emerald-700">
                                     Resubmitted for {formatMetadataValue(document.metadata.resubmission_requirement_key)}
@@ -769,8 +948,13 @@ const AdminKycReviews = () => {
                                       <div>
                                         <div className="font-medium text-slate-900">{document.type}</div>
                                         <div className="break-all text-xs text-slate-500">
-                                          {document.original_name || document.file_path || "Stored related-person evidence"}
+                                          {document.original_name || "Stored related-person evidence"}
                                         </div>
+                                        {document.document_number && (
+                                          <div className="text-xs text-slate-500">
+                                            Document no. {maskSensitiveValue(document.document_number)}
+                                          </div>
+                                        )}
                                         {document.metadata?.resubmission_requirement_key && (
                                           <div className="text-xs font-medium text-emerald-700">
                                             Resubmitted for {formatMetadataValue(document.metadata.resubmission_requirement_key)}
@@ -808,56 +992,184 @@ const AdminKycReviews = () => {
                     </Section>
 
                     <Section title="AML screenings">
-                      <div className="space-y-2">
-                        {selectedProfile.aml_screenings?.length ? (
-                          selectedProfile.aml_screenings.map((screening) => (
+                      {amlScreeningsQuery.isLoading ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                          Loading AML screenings...
+                        </div>
+                      ) : amlScreeningsQuery.isError ? (
+                        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                          {amlScreeningsQuery.error instanceof Error
+                            ? amlScreeningsQuery.error.message
+                            : "Unable to load AML screenings."}
+                        </div>
+                      ) : amlScreeningsQuery.data?.data.length ? (
+                        <div className="space-y-3">
+                          {amlScreeningsQuery.data.data.map((screening) => (
                             <div key={screening.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div>
-                                  <div className="font-medium text-slate-900">{screening.subject_name}</div>
+                                  <div className="font-medium text-slate-900">AML screening</div>
                                   <div className="text-xs text-slate-500">{screening.subject_role}</div>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge className={statusClassName(screening.status)}>{screening.status}</Badge>
-                                  {!isAmlClearForApproval(screening.status) && isActiveAmlScreening(screening.status) ? (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                                      disabled={isReviewing}
-                                      onClick={() => void amlClearMutation.mutateAsync(screening)}
-                                    >
-                                      Manual clear
-                                    </Button>
-                                  ) : null}
-                                </div>
+                                <Badge className={statusClassName(screening.status)}>{screening.status}</Badge>
                               </div>
-                              <div className="mt-2 grid gap-2 text-slate-600 md:grid-cols-2">
+                              <div className="mt-3 grid gap-3 text-slate-600 md:grid-cols-2 lg:grid-cols-3">
+                                <DetailItem label="Screening status" value={screening.status} />
                                 <DetailItem label="Provider" value={screening.screening_provider} />
-                                <DetailItem label="Risk" value={screening.risk_level || "-"} />
-                                <DetailItem label="Score" value={screening.risk_score ?? "-"} />
-                                <DetailItem label="Screened" value={formatDate(screening.screened_at)} />
+                                <DetailItem label="Created" value={formatDate(screening.created_at)} />
+                                <DetailItem label="Completed" value={formatDate(screening.screened_at)} />
+                                <DetailItem label="Review status" value={screening.status} />
+                                <DetailItem
+                                  label="Reviewer"
+                                  value={screening.reviewed_by?.full_name || screening.reviewed_by?.email || "-"}
+                                />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {screening.matches?.length ? (
+                                  screening.matches.map((match) => (
+                                    <div key={match.id} className="grid gap-2 rounded-xl bg-slate-50 p-3 text-slate-600 md:grid-cols-3">
+                                      <DetailItem label="Match status" value={match.status} />
+                                      <DetailItem label="Match type" value={match.list_type} />
+                                      <DetailItem label="Match score" value={match.score ?? "-"} />
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">No AML matches found.</div>
+                                )}
                               </div>
                               {screening.review_note ? (
                                 <div className="mt-2 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">
                                   Review note: {screening.review_note}
                                 </div>
                               ) : null}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {screening.status === "potential_match" ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    disabled={isReviewing}
+                                    onClick={() => openAmlAction(screening, "confirm")}
+                                  >
+                                    Confirm match
+                                  </Button>
+                                ) : null}
+                                {!isAmlClearForApproval(screening.status) && isActiveAmlScreening(screening.status) ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                    disabled={isReviewing}
+                                    onClick={() => openAmlAction(screening, "clear")}
+                                  >
+                                    Clear AML
+                                  </Button>
+                                ) : null}
+                              </div>
                             </div>
-                          ))
-                        ) : (
-                          <div className="text-sm text-slate-500">No AML screening has been run yet.</div>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                          No AML screenings found.
+                        </div>
+                      )}
+                    </Section>
+
+                    <Section title="Provider submissions">
+                      {providerSubmissionsQuery.isLoading ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                          Loading provider submissions...
+                        </div>
+                      ) : providerSubmissionsQuery.isError ? (
+                        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                          {providerSubmissionsQuery.error instanceof Error
+                            ? providerSubmissionsQuery.error.message
+                            : "Unable to load provider submissions."}
+                        </div>
+                      ) : providerSubmissionsQuery.data?.data.length ? (
+                        <div className="space-y-3">
+                          {providerSubmissionsQuery.data.data.map((submission) => {
+                            const providerCodeAvailable = Boolean(submission.provider?.code);
+
+                            return (
+                              <div key={submission.id} className="rounded-2xl border border-slate-200 p-4 text-sm">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="h-4 w-4 text-slate-500" />
+                                    <div className="font-semibold text-slate-900">
+                                      {submission.provider?.name || "Provider unavailable"}
+                                    </div>
+                                  </div>
+                                  <Badge className={statusClassName(submission.status)}>{submission.status}</Badge>
+                                </div>
+                                <div className="mt-4 grid gap-3 text-slate-600 md:grid-cols-2 lg:grid-cols-3">
+                                  <DetailItem label="Submission status" value={submission.status} />
+                                  <DetailItem label="Provider account status" value={submission.provider_account?.status || "-"} />
+                                  <DetailItem label="Submitted" value={formatDate(submission.submitted_at)} />
+                                  <DetailItem label="Approved" value={formatDate(submission.approved_at)} />
+                                  <DetailItem label="Rejected" value={formatDate(submission.rejected_at)} />
+                                  <DetailItem label="Reviewed" value={formatDate(submission.reviewed_at)} />
+                                  <DetailItem
+                                    label="Reviewed by"
+                                    value={submission.reviewed_by?.full_name || submission.reviewed_by?.email || "-"}
+                                  />
+                                </div>
+                                {submission.failure_reason ? (
+                                  <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-700">
+                                    Failure reason: {submission.failure_reason}
+                                  </div>
+                                ) : null}
+                                {submission.review_note ? (
+                                  <div className="mt-3 rounded-xl bg-slate-50 p-3 text-slate-600">
+                                    Review note: {submission.review_note}
+                                  </div>
+                                ) : null}
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="rounded-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                                    disabled={!providerCodeAvailable || !providerApprovalCompatible || providerApproveMutation.isPending || providerRejectMutation.isPending}
+                                    onClick={() => openProviderAction(submission, "approve")}
+                                  >
+                                    Approve provider
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    disabled={!providerCodeAvailable || providerApproveMutation.isPending || providerRejectMutation.isPending}
+                                    onClick={() => openProviderAction(submission, "reject")}
+                                  >
+                                    Reject provider
+                                  </Button>
+                                </div>
+                                {!providerApprovalCompatible ? (
+                                  <div className="mt-3 text-xs text-amber-700">
+                                    Provider approval requires verified internal KYC and a compatible AML state. The backend makes the final decision.
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                          No provider submissions found.
+                        </div>
+                      )}
                     </Section>
 
                     <div className="space-y-2">
-                      <Label htmlFor="review-note">Review note</Label>
+                      <Label htmlFor="approval-review-note">Approval review note</Label>
                       <Textarea
-                        id="review-note"
-                        value={reviewNote}
-                        onChange={(event) => setReviewNote(event.target.value)}
+                        id="approval-review-note"
+                        value={approvalReviewNote}
+                        onChange={(event) => setApprovalReviewNote(event.target.value)}
                         placeholder="Optional internal note"
                         className="min-h-24 rounded-2xl border-slate-200"
                       />
@@ -877,7 +1189,7 @@ const AdminKycReviews = () => {
                       <Button
                         type="button"
                         className="rounded-2xl bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                        disabled={isReviewing || selectedOpenRequirementCount > 0 || selectedAmlApprovalBlocked}
+                        disabled={isReviewing || selectedRequiredRequirementCount > 0 || selectedAmlApprovalBlocked}
                         onClick={() => void approveMutation.mutateAsync(selectedProfile)}
                       >
                         <CheckCircle2 className="h-4 w-4" />
@@ -895,9 +1207,9 @@ const AdminKycReviews = () => {
                       </Button>
                     </div>
 
-                    {selectedOpenRequirementCount > 0 && (
+                    {selectedRequiredRequirementCount > 0 && (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                        Resolve open requirements before approving this profile.
+                        Submit all required KYC requirements before approving this profile.
                       </div>
                     )}
 
@@ -939,6 +1251,16 @@ const AdminKycReviews = () => {
               className="min-h-28 rounded-2xl border-slate-200"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="rejection-review-note">Internal review note</Label>
+            <Textarea
+              id="rejection-review-note"
+              value={rejectionReviewNote}
+              onChange={(event) => setRejectionReviewNote(event.target.value)}
+              placeholder="Optional note retained with this rejection"
+              className="min-h-24 rounded-2xl border-slate-200"
+            />
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRejectDialogOpen(false)}>
               Cancel
@@ -950,6 +1272,139 @@ const AdminKycReviews = () => {
               onClick={() => selectedProfile && void rejectMutation.mutateAsync(selectedProfile)}
             >
               Reject profile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={amlAction !== null}
+        onOpenChange={(open) => {
+          if (!open) closeAmlAction();
+        }}
+      >
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>{amlAction === "confirm" ? "Confirm AML match" : "Clear AML screening"}</DialogTitle>
+            <DialogDescription>
+              {amlAction === "confirm"
+                ? "Confirm that the potential AML match is a true match. This decision affects KYC eligibility."
+                : "Confirm that this screening has been reviewed and can be manually cleared. The backend remains authoritative."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Current status</div>
+            <div className="mt-1 font-semibold text-slate-900">{selectedAmlScreening?.status || "-"}</div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="aml-review-note">Review note</Label>
+            <Textarea
+              id="aml-review-note"
+              value={amlReviewNote}
+              onChange={(event) => setAmlReviewNote(event.target.value)}
+              placeholder="Optional internal review note"
+              className="min-h-24 rounded-2xl border-slate-200"
+            />
+          </div>
+          {amlActionError ? (
+            <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {amlActionError}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeAmlAction}>Cancel</Button>
+            <Button
+              type="button"
+              className={amlAction === "confirm" ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"}
+              disabled={!selectedAmlScreening || amlClearMutation.isPending || amlConfirmMutation.isPending}
+              onClick={() => {
+                if (!selectedAmlScreening) return;
+                if (amlAction === "confirm") amlConfirmMutation.mutate(selectedAmlScreening);
+                if (amlAction === "clear") amlClearMutation.mutate(selectedAmlScreening);
+              }}
+            >
+              {amlAction === "confirm" ? "Confirm AML match" : "Confirm AML clear"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={providerAction !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setProviderAction(null);
+            setSelectedProviderSubmission(null);
+            setProviderReviewNote("");
+            setProviderRejectionReason("");
+            setProviderActionError("");
+          }
+        }}
+      >
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>{providerAction === "approve" ? "Approve provider submission" : "Reject provider submission"}</DialogTitle>
+            <DialogDescription>
+              {providerAction === "approve"
+                ? "Confirm that this verified customer can be released to the provider. The backend will revalidate KYC and AML eligibility."
+                : "Reject this provider submission with a clear reason for the internal record."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Provider</div>
+            <div className="mt-1 font-semibold text-slate-900">
+              {selectedProviderSubmission?.provider?.name || "Provider unavailable"}
+            </div>
+          </div>
+          {providerAction === "reject" ? (
+            <div className="space-y-2">
+              <Label htmlFor="provider-rejection-reason">Rejection reason</Label>
+              <Textarea
+                id="provider-rejection-reason"
+                value={providerRejectionReason}
+                onChange={(event) => {
+                  setProviderRejectionReason(event.target.value);
+                  setProviderActionError("");
+                }}
+                placeholder="Explain why this provider submission is being rejected"
+                className="min-h-28 rounded-2xl border-slate-200"
+              />
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="provider-review-note">Review note</Label>
+            <Textarea
+              id="provider-review-note"
+              value={providerReviewNote}
+              onChange={(event) => setProviderReviewNote(event.target.value)}
+              placeholder="Optional internal note"
+              className="min-h-24 rounded-2xl border-slate-200"
+            />
+          </div>
+          {providerActionError ? (
+            <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {providerActionError}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setProviderAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className={providerAction === "approve" ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400" : "bg-red-600 text-white hover:bg-red-700"}
+              disabled={!selectedProviderSubmission || providerApproveMutation.isPending || providerRejectMutation.isPending}
+              onClick={() => {
+                if (!selectedProviderSubmission) return;
+                if (providerAction === "reject" && !providerRejectionReason.trim()) {
+                  setProviderActionError("Rejection reason is required.");
+                  return;
+                }
+                if (providerAction === "approve") providerApproveMutation.mutate(selectedProviderSubmission);
+                if (providerAction === "reject") providerRejectMutation.mutate(selectedProviderSubmission);
+              }}
+            >
+              {providerAction === "approve" ? "Confirm provider approval" : "Confirm provider rejection"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -985,6 +1440,16 @@ const AdminKycReviews = () => {
                 onChange={(event) => setUpdateRequestReason(event.target.value)}
                 placeholder="Explain what is inaccurate, missing, unclear, expired, or must be resent."
                 className="min-h-32 rounded-2xl border-slate-200"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-review-note">Internal review note</Label>
+              <Textarea
+                id="update-review-note"
+                value={updateReviewNote}
+                onChange={(event) => setUpdateReviewNote(event.target.value)}
+                placeholder="Optional internal context for this request"
+                className="min-h-24 rounded-2xl border-slate-200"
               />
             </div>
           </div>

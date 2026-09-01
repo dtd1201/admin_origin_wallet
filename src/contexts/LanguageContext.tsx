@@ -32,7 +32,6 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 declare global {
   interface Window {
-    google: Record<string, unknown>;
     googleTranslateElementInit: () => void;
   }
 }
