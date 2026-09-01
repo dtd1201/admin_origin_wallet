@@ -80,11 +80,11 @@ const emptyReviewForm: ReviewFormState = {
   linkLabel: "",
 };
 
-const niumReviewPath = [
+const niumOperationsPath = [
   { step: "1", title: "Customer / KYC/KYB", detail: "Applicant, documents, owners, and review state", to: "/admin/kyc-reviews" },
   { step: "2", title: "Corporate RFI", detail: "Requested data, reviewed response, and reconciliation", to: "/admin/rfi-cases" },
-  { step: "3", title: "Compliance CLEAR", detail: "Backend-authoritative resolved state", to: "/admin/provider-accounts" },
-  { step: "4", title: "Provider Account / VAN", detail: "Masked virtual-account assignment evidence", to: "/admin/provider-operations" },
+  { step: "3", title: "Compliance CLEAR", detail: "Backend-authoritative compliance events and resolution", to: "/admin/compliance" },
+  { step: "4", title: "Provider Account / VAN", detail: "Account state and links to historical assignment evidence", to: "/admin/provider-accounts" },
   { step: "5", title: "Wallet Funding", detail: "Processed funding webhook evidence", to: "/admin/provider-operations" },
   { step: "6", title: "Transfer / Payout", detail: "Submission, provider reference, and completion", to: "/admin/transactions" },
   { step: "7", title: "Transaction RFI", detail: "Provider status and human-reviewed response", to: "/admin/rfi-cases" },
@@ -332,11 +332,11 @@ const AdminDashboard = () => {
 
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader>
-              <CardTitle>NIUM Sandbox review path</CardTitle>
-              <CardDescription>Navigate the validated workflow using backend-authoritative records. Historical provider execution is presented as evidence, not as UI-originated activity.</CardDescription>
+              <CardTitle>NIUM Operations Review</CardTitle>
+              <CardDescription>Navigate the operational workflow using backend-authoritative records. Historical provider execution is presented as evidence, not as UI-originated activity.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
-              {niumReviewPath.map((item) => (
+              {niumOperationsPath.map((item) => (
                 <Link key={`${item.step}-${item.title}`} to={item.to} className="group flex items-start gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 transition hover:border-emerald-300 hover:bg-emerald-50">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white group-hover:bg-emerald-500 group-hover:text-slate-950">{item.step}</div>
                   <div>

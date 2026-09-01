@@ -43,7 +43,9 @@ beforeEach(() => {
 
 it("labels dashboard metrics according to backend and loaded-record scope", async () => {
   renderPage();
-  expect(await screen.findByText("User records")).toBeInTheDocument();
+  expect(await screen.findByText("NIUM Operations Review")).toBeInTheDocument();
+  expect(screen.queryByText("NIUM Sandbox review path")).not.toBeInTheDocument();
+  expect(screen.getByText("User records")).toBeInTheDocument();
   expect(await screen.findByText("240")).toBeInTheDocument();
   expect(screen.getByText("Transfer records")).toBeInTheDocument();
   expect(screen.getByText("630")).toBeInTheDocument();
