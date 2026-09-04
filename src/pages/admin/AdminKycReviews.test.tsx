@@ -237,6 +237,68 @@ it("displays Nium submission tracking without metadata or raw identifiers", asyn
   expect(screen.queryByText("raw-external-id")).not.toBeInTheDocument();
 });
 
+it("submits approval once with only the review note and refreshes Nium state", async () => {
+  let resolveApproval!: (value: unknown) => void;
+  const approvalResponse = new Promise((resolve) => {
+    resolveApproval = resolve;
+  });
+  apiMocks.requestApi
+    .mockResolvedValueOnce(pageResponse)
+    .mockImplementationOnce(() => approvalResponse)
+    .mockResolvedValue(pageResponse);
+  apiMocks.getAdminKycProviderSubmissions
+    .mockResolvedValueOnce({ user: profile.user, data: [] })
+    .mockResolvedValue({ user: profile.user, data: [providerSubmission] });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.change(await screen.findByLabelText("Approval review note"), { target: { value: "  Approved after review.  " } });
+
+  const approveButton = await screen.findByRole("button", { name: "Approve" });
+  fireEvent.click(approveButton);
+  fireEvent.click(approveButton);
+
+  await waitFor(() => expect(approveButton).toBeDisabled());
+  expect(apiMocks.requestApi).toHaveBeenCalledTimes(2);
+  expect(apiMocks.requestApi).toHaveBeenNthCalledWith(2, "/admin/users/20/kyc-profile/approve", {
+    method: "POST",
+    token: "admin-token",
+    body: { review_note: "Approved after review." },
+  });
+
+  resolveApproval({
+    message: "KYC profile approved and Nium onboarding submitted.",
+    user: { ...profile.user, kyc_status: "verified" },
+    kyc_profile: { ...detailProfile, status: "verified" },
+  });
+
+  expect(await screen.findByText("Secure Provider")).toBeInTheDocument();
+  expect(screen.getAllByText("submitted").length).toBeGreaterThan(0);
+  await waitFor(() => expect(apiMocks.getAdminKycProviderSubmissions).toHaveBeenCalledTimes(2));
+});
+
+it("shows a safe approval failure diagnostic", async () => {
+  apiMocks.requestApi
+    .mockResolvedValueOnce(pageResponse)
+    .mockRejectedValueOnce(new Error("KYC was approved, but Nium onboarding could not be completed. The submission can be retried safely."));
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+
+  expect((await screen.findAllByText(
+    "KYC was approved, but Nium onboarding could not be completed. The submission can be retried safely.",
+  )).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/nium_kyc_type|customerHashId|bankAccountDetails/i)).not.toBeInTheDocument();
+
+  const approveButton = screen.getByRole("button", { name: "Approve" });
+  await waitFor(() => expect(approveButton).toBeEnabled());
+  fireEvent.click(approveButton);
+  await waitFor(() => expect(
+    apiMocks.requestApi.mock.calls.filter(([path]) => path === "/admin/users/20/kyc-profile/approve"),
+  ).toHaveLength(2));
+});
+
 it("shows AML screening loading", async () => {
   apiMocks.getAdminAmlScreenings.mockReturnValue(new Promise(() => undefined));
   renderPage();

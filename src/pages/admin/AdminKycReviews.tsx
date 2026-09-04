@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, CheckCircle2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   adminEndpointConfig,
@@ -341,6 +341,20 @@ const AdminKycReviews = () => {
       setReviewError(error instanceof Error ? error.message : "Unable to approve KYC/KYB profile.");
     },
   });
+  const approvalInFlightRef = useRef(false);
+
+  const approveSelectedProfile = async (profile: AdminKycProfile) => {
+    if (approvalInFlightRef.current) return;
+
+    approvalInFlightRef.current = true;
+    try {
+      await approveMutation.mutateAsync(profile);
+    } catch {
+      // React Query's onError handler owns the safe user-facing diagnostic.
+    } finally {
+      approvalInFlightRef.current = false;
+    }
+  };
 
   const rejectMutation = useMutation({
     mutationFn: async (profile: AdminKycProfile) =>
@@ -1107,7 +1121,7 @@ const AdminKycReviews = () => {
                         type="button"
                         className="rounded-2xl bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                         disabled={isReviewing || selectedRequiredRequirementCount > 0 || selectedAmlApprovalBlocked}
-                        onClick={() => void approveMutation.mutateAsync(selectedProfile)}
+                        onClick={() => void approveSelectedProfile(selectedProfile)}
                       >
                         <CheckCircle2 className="h-4 w-4" />
                         Approve
