@@ -117,8 +117,25 @@ const getProfileName = (profile: AdminKycProfile) =>
 const getRequiredRequirementCount = (profile: AdminKycProfile) =>
   profile.requirements?.filter((requirement) => requirement.status === "required").length ?? 0;
 
-const isAmlClearForApproval = (status?: string | null) =>
-  ["clear", "manual_clear"].includes(String(status ?? "").toLowerCase());
+const isAmlClearForApproval = (
+  status?: string | null,
+  complianceDecision?: string | null,
+) => {
+  return (
+    String(status ?? "").toLowerCase() === "completed" &&
+    String(complianceDecision ?? "").toLowerCase() === "clear"
+  );
+};
+
+const requiresManualAmlReview = (
+  status?: string | null,
+  complianceDecision?: string | null,
+) => {
+  return (
+    String(status ?? "").toLowerCase() === "manual_review" &&
+    String(complianceDecision ?? "").toLowerCase() === "pending_review"
+  );
+};
 
 const isActiveAmlScreening = (status?: string | null) => String(status ?? "").toLowerCase() !== "superseded";
 
@@ -517,7 +534,7 @@ const AdminKycReviews = () => {
     selectedProfile?.aml_screenings?.filter((screening) => isActiveAmlScreening(screening.status)) ?? [];
   const selectedAmlMissing = Boolean(selectedProfile) && selectedActiveAmlScreenings.length === 0;
   const selectedBlockingAmlCount = selectedActiveAmlScreenings.filter(
-    (screening) => !isAmlClearForApproval(screening.status),
+    (screening) => !isAmlClearForApproval(screening.status, screening.compliance_decision),
   ).length;
   const selectedAmlApprovalBlocked = selectedAmlMissing || selectedBlockingAmlCount > 0;
   const providerApprovalCompatible =
@@ -1043,29 +1060,32 @@ const AdminKycReviews = () => {
                                 </div>
                               ) : null}
                               <div className="mt-3 flex flex-wrap gap-2">
-                                {screening.status === "potential_match" ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    disabled={isReviewing}
-                                    onClick={() => openAmlAction(screening, "confirm")}
-                                  >
-                                    Confirm match
-                                  </Button>
+                                {isAmlClearForApproval(screening.status, screening.compliance_decision) ? (
+                                  <div className="text-xs font-medium text-emerald-700">AML cleared automatically</div>
                                 ) : null}
-                                {!isAmlClearForApproval(screening.status) && isActiveAmlScreening(screening.status) ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                                    disabled={isReviewing}
-                                    onClick={() => openAmlAction(screening, "clear")}
-                                  >
-                                    Clear AML
-                                  </Button>
+                                {requiresManualAmlReview(screening.status, screening.compliance_decision) ? (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                      disabled={isReviewing}
+                                      onClick={() => openAmlAction(screening, "clear")}
+                                    >
+                                      Clear AML
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                      disabled={isReviewing}
+                                      onClick={() => openAmlAction(screening, "confirm")}
+                                    >
+                                      Confirm AML Match
+                                    </Button>
+                                  </>
                                 ) : null}
                               </div>
                             </div>
