@@ -114,6 +114,47 @@ const getProfileName = (profile: AdminKycProfile) =>
 const getRequiredRequirementCount = (profile: AdminKycProfile) =>
   profile.requirements?.filter((requirement) => requirement.status === "required").length ?? 0;
 
+const hasBlockingRequiredRequirements = (profile: AdminKycProfile) => {
+  const requiredKeys = new Set(
+    profile.requirements
+      ?.filter((requirement) => requirement.status === "required")
+      .map((requirement) => requirement.key) ?? [],
+  );
+  const metadata = profile.metadata;
+  const isHkCorporateFull =
+    profile.applicant_type === "business" &&
+    String(metadata?.nium_region ?? "").toUpperCase() === "HK" &&
+    String(metadata?.nium_kyc_type ?? "").toLowerCase() === "full";
+
+  if (!isHkCorporateFull) return requiredKeys.size > 0;
+
+  const hasBusinessRegistration = profile.documents?.some(
+    (document) =>
+      ["submitted", "approved", "verified"].includes(String(document.status).toLowerCase()) &&
+      ["business_registration", "certificate_of_incorporation"].includes(
+        String(document.type).toLowerCase(),
+      ),
+  ) ?? false;
+  const blockingKeys = [
+    "authorized_representative",
+    "authorized_representative_identity_document",
+    "beneficial_owner",
+    "beneficial_owner_identity_document",
+  ];
+  const niumV5Fields = metadata?.nium_v5_fields;
+  const isMultiLayeredCompany =
+    typeof niumV5Fields === "object" &&
+    niumV5Fields !== null &&
+    !Array.isArray(niumV5Fields) &&
+    (niumV5Fields as Record<string, unknown>).isMultiLayeredCompany === true;
+
+  if (isMultiLayeredCompany) {
+    blockingKeys.push("ownership_structure");
+  }
+
+  return !hasBusinessRegistration || blockingKeys.some((key) => requiredKeys.has(key));
+};
+
 const isAmlClearForApproval = (
   status?: string | null,
   complianceDecision?: string | null,
@@ -494,7 +535,9 @@ const AdminKycReviews = () => {
     setUpdateRequestDialogOpen(true);
   };
 
-  const selectedRequiredRequirementCount = selectedProfile ? getRequiredRequirementCount(selectedProfile) : 0;
+  const selectedRequiredRequirementsBlockApproval = selectedProfile
+    ? hasBlockingRequiredRequirements(selectedProfile)
+    : false;
   const selectedActiveAmlScreenings =
     selectedProfile?.aml_screenings?.filter(isActiveAmlScreening) ?? [];
   const displayedAmlScreenings = amlScreeningsQuery.data?.data.filter(isActiveAmlScreening) ?? [];
@@ -1147,7 +1190,7 @@ const AdminKycReviews = () => {
                       <Button
                         type="button"
                         className="rounded-2xl bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                        disabled={isReviewing || selectedRequiredRequirementCount > 0 || selectedAmlApprovalBlocked}
+                        disabled={isReviewing || selectedRequiredRequirementsBlockApproval || selectedAmlApprovalBlocked}
                         onClick={() => void approveSelectedProfile(selectedProfile)}
                       >
                         <CheckCircle2 className="h-4 w-4" />
@@ -1165,7 +1208,7 @@ const AdminKycReviews = () => {
                       </Button>
                     </div>
 
-                    {selectedRequiredRequirementCount > 0 && (
+                    {selectedRequiredRequirementsBlockApproval && (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                         Submit all required KYC requirements before approving this profile.
                       </div>

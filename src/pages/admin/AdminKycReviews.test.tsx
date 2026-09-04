@@ -178,6 +178,175 @@ it("does not block approval for needs_more_info requirements", async () => {
   expect(await screen.findByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
+it("allows HK Corporate Full approval with a submitted business registration despite generic required rows", async () => {
+  const hkProfile = {
+    ...detailProfile,
+    metadata: {
+      nium_region: "HK",
+      nium_kyc_type: "full",
+      nium_v5_fields: { isMultiLayeredCompany: false },
+    },
+    documents: [{ ...detailProfile.documents![0], type: "business_registration", status: "submitted" }],
+    requirements: [
+      "selfie_liveness",
+      "identity_document_back",
+      "account_opening_application_form",
+      "ownership_structure",
+      "certificate_of_incorporation",
+    ].map((key, index) => ({
+      id: index + 100,
+      key,
+      label: key,
+      category: "document",
+      status: "required",
+      requirement_type: "document",
+    })),
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: hkProfile,
+    kyc_submission: hkProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeEnabled();
+  expect(screen.queryByText("Submit all required KYC requirements before approving this profile.")).not.toBeInTheDocument();
+});
+
+it("accepts a submitted certificate of incorporation for HK Corporate Full approval", async () => {
+  const hkProfile = {
+    ...detailProfile,
+    metadata: { nium_region: "hk", nium_kyc_type: "FULL" },
+    documents: [{ ...detailProfile.documents![0], type: "certificate_of_incorporation", status: "verified" }],
+    requirements: [{
+      id: 110,
+      key: "business_registration",
+      label: "Business registration",
+      category: "document",
+      status: "required",
+      requirement_type: "document",
+    }],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: hkProfile,
+    kyc_submission: hkProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeEnabled();
+});
+
+it("blocks HK Corporate Full approval without a submitted registration document", async () => {
+  const hkProfile = {
+    ...detailProfile,
+    metadata: { nium_region: "HK", nium_kyc_type: "full" },
+    documents: [{ ...detailProfile.documents![0], type: "business_registration", status: "rejected" }],
+    requirements: [],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: hkProfile,
+    kyc_submission: hkProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
+  expect(screen.getByText("Submit all required KYC requirements before approving this profile.")).toBeInTheDocument();
+});
+
+it.each([
+  "authorized_representative",
+  "authorized_representative_identity_document",
+  "beneficial_owner",
+  "beneficial_owner_identity_document",
+])("blocks HK Corporate Full approval for required %s", async (key) => {
+  const hkProfile = {
+    ...detailProfile,
+    metadata: { nium_region: "HK", nium_kyc_type: "full" },
+    documents: [{ ...detailProfile.documents![0], type: "business_registration", status: "approved" }],
+    requirements: [{
+      id: 120,
+      key,
+      label: key,
+      category: "related_person",
+      status: "required",
+      requirement_type: "document",
+    }],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: hkProfile,
+    kyc_submission: hkProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
+});
+
+it("blocks ownership structure only for multilayered HK Corporate Full companies", async () => {
+  const hkProfile = {
+    ...detailProfile,
+    metadata: {
+      nium_region: "HK",
+      nium_kyc_type: "full",
+      nium_v5_fields: { isMultiLayeredCompany: true },
+    },
+    documents: [{ ...detailProfile.documents![0], type: "business_registration", status: "submitted" }],
+    requirements: [{
+      id: 130,
+      key: "ownership_structure",
+      label: "Ownership structure",
+      category: "document",
+      status: "required",
+      requirement_type: "document",
+    }],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: hkProfile,
+    kyc_submission: hkProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
+});
+
+it("keeps generic required rows blocking non-HK approval", async () => {
+  const nonHkProfile = {
+    ...detailProfile,
+    metadata: { nium_region: "SG", nium_kyc_type: "full" },
+    requirements: [{
+      id: 140,
+      key: "selfie_liveness",
+      label: "Selfie liveness",
+      category: "document",
+      status: "required",
+      requirement_type: "document",
+    }],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: nonHkProfile,
+    kyc_submission: nonHkProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
+});
+
 it("masks sensitive fields and hides raw metadata and storage paths", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
