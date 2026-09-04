@@ -7,7 +7,6 @@ import type {
   AdminBankAccount,
   AdminBeneficiary,
   AdminKycDetailResponse,
-  AdminKycProviderReviewResponse,
   AdminKycProviderSubmissionsResponse,
   AdminKycProviderSubmission,
   AdminProviderAccountSyncResponse,
@@ -131,33 +130,6 @@ export const syncAdminProviderAccount = (
   `/admin/providers/${encodeURIComponent(providerCode)}/users/${userId}/sync`,
   { method: "POST", body: {}, token },
 );
-
-export const approveAdminKycProviderSubmission = (
-  userId: number,
-  provider: string,
-  reviewNote?: string | null,
-  token?: string | null,
-) =>
-  requestApi<AdminKycProviderReviewResponse>(
-    `/admin/users/${userId}/kyc-profile/providers/${encodeURIComponent(provider)}/approve`,
-    { method: "POST", body: { review_note: reviewNote ?? null }, token },
-  );
-
-export const rejectAdminKycProviderSubmission = (
-  userId: number,
-  provider: string,
-  rejectionReason: string,
-  reviewNote?: string | null,
-  token?: string | null,
-) =>
-  requestApi<AdminKycProviderReviewResponse>(
-    `/admin/users/${userId}/kyc-profile/providers/${encodeURIComponent(provider)}/reject`,
-    {
-      method: "POST",
-      body: { rejection_reason: rejectionReason, review_note: reviewNote ?? null },
-      token,
-    },
-  );
 
 export const confirmAdminAmlMatch = (screeningId: number, reviewNote?: string | null, token?: string | null) =>
   requestApi<AdminAmlReviewResponse>(`${adminEndpointConfig.amlScreenings}/${screeningId}/confirm-match`, {

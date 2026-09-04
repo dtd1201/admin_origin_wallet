@@ -7,8 +7,6 @@ const apiMocks = vi.hoisted(() => ({
   requestApi: vi.fn(),
   getAdminKycProfile: vi.fn(),
   getAdminKycProviderSubmissions: vi.fn(),
-  approveAdminKycProviderSubmission: vi.fn(),
-  rejectAdminKycProviderSubmission: vi.fn(),
   getAdminAmlScreenings: vi.fn(),
   clearAdminAmlScreening: vi.fn(),
   confirmAdminAmlMatch: vi.fn(),
@@ -20,8 +18,6 @@ vi.mock("@/lib/api", () => ({
   requestApi: apiMocks.requestApi,
   getAdminKycProfile: apiMocks.getAdminKycProfile,
   getAdminKycProviderSubmissions: apiMocks.getAdminKycProviderSubmissions,
-  approveAdminKycProviderSubmission: apiMocks.approveAdminKycProviderSubmission,
-  rejectAdminKycProviderSubmission: apiMocks.rejectAdminKycProviderSubmission,
   getAdminAmlScreenings: apiMocks.getAdminAmlScreenings,
   clearAdminAmlScreening: apiMocks.clearAdminAmlScreening,
   confirmAdminAmlMatch: apiMocks.confirmAdminAmlMatch,
@@ -144,8 +140,6 @@ beforeEach(() => {
   apiMocks.requestApi.mockResolvedValue(pageResponse);
   apiMocks.getAdminKycProfile.mockResolvedValue({ user: profile.user, kyc_profile: detailProfile, kyc_submission: detailProfile });
   apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [] });
-  apiMocks.approveAdminKycProviderSubmission.mockResolvedValue({ message: "Approved", provider: providerSubmission.provider, kyc_provider_submission: providerSubmission });
-  apiMocks.rejectAdminKycProviderSubmission.mockResolvedValue({ message: "Rejected", provider: providerSubmission.provider, kyc_provider_submission: { ...providerSubmission, status: "rejected" } });
   apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [] });
   apiMocks.clearAdminAmlScreening.mockResolvedValue({ message: "Cleared", aml_screening: { ...amlScreening, status: "manual_clear" } });
   apiMocks.confirmAdminAmlMatch.mockResolvedValue({ message: "Confirmed", aml_screening: { ...amlScreening, status: "confirmed_match" } });
@@ -246,79 +240,6 @@ it("displays provider statuses and safe review fields without metadata or raw id
   expect(screen.queryByText("secure-provider-code")).not.toBeInTheDocument();
   expect(screen.queryByText("provider-secret-token")).not.toBeInTheDocument();
   expect(screen.queryByText("raw-external-id")).not.toBeInTheDocument();
-});
-
-it("approves a compatible provider submission after confirmation", async () => {
-  apiMocks.getAdminKycProfile.mockResolvedValue({
-    user: profile.user,
-    kyc_profile: { ...detailProfile, status: "verified" },
-    kyc_submission: detailProfile,
-  });
-  apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [providerSubmission] });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Approve provider" }));
-  fireEvent.change(screen.getByLabelText("Review note"), { target: { value: "Release approved" } });
-  fireEvent.click(screen.getByRole("button", { name: "Confirm provider approval" }));
-  await waitFor(() => expect(apiMocks.approveAdminKycProviderSubmission).toHaveBeenCalledWith(
-    20,
-    "secure-provider-code",
-    "Release approved",
-    "admin-token",
-  ));
-});
-
-it("shows provider approval validation errors", async () => {
-  apiMocks.getAdminKycProfile.mockResolvedValue({
-    user: profile.user,
-    kyc_profile: { ...detailProfile, status: "verified" },
-    kyc_submission: detailProfile,
-  });
-  apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [providerSubmission] });
-  apiMocks.approveAdminKycProviderSubmission.mockRejectedValue(new Error("Provider submission cannot be approved."));
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Approve provider" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm provider approval" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Provider submission cannot be approved.");
-});
-
-it("requires a reason before rejecting a provider submission", async () => {
-  apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [providerSubmission] });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Reject provider" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm provider rejection" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Rejection reason is required.");
-  expect(apiMocks.rejectAdminKycProviderSubmission).not.toHaveBeenCalled();
-});
-
-it("rejects a provider submission with its required reason", async () => {
-  apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [providerSubmission] });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Reject provider" }));
-  fireEvent.change(screen.getByLabelText("Rejection reason"), { target: { value: "Provider documents incomplete" } });
-  fireEvent.change(screen.getByLabelText("Review note"), { target: { value: "Escalated by compliance" } });
-  fireEvent.click(screen.getByRole("button", { name: "Confirm provider rejection" }));
-  await waitFor(() => expect(apiMocks.rejectAdminKycProviderSubmission).toHaveBeenCalledWith(
-    20,
-    "secure-provider-code",
-    "Provider documents incomplete",
-    "Escalated by compliance",
-    "admin-token",
-  ));
-});
-
-it("shows provider permission errors", async () => {
-  apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [providerSubmission] });
-  apiMocks.rejectAdminKycProviderSubmission.mockRejectedValue(new Error("You do not have permission to review this provider."));
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Reject provider" }));
-  fireEvent.change(screen.getByLabelText("Rejection reason"), { target: { value: "Compliance decision" } });
-  fireEvent.click(screen.getByRole("button", { name: "Confirm provider rejection" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission to review this provider.");
 });
 
 it("shows AML screening loading", async () => {

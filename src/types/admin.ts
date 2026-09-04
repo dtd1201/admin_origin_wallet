@@ -438,12 +438,6 @@ export interface AdminKycProviderSubmissionsResponse {
   data: AdminKycProviderSubmission[];
 }
 
-export interface AdminKycProviderReviewResponse {
-  message: string;
-  provider: ProviderSummary;
-  kyc_provider_submission: AdminKycProviderSubmission;
-}
-
 export interface AdminProviderAccountSyncResponse {
   message?: string;
   provider: ProviderSummary;

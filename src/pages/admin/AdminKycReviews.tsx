@@ -4,14 +4,12 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   adminEndpointConfig,
-  approveAdminKycProviderSubmission,
   buildApiUrl,
   clearAdminAmlScreening,
   confirmAdminAmlMatch,
   getAdminAmlScreenings,
   getAdminKycProfile,
   getAdminKycProviderSubmissions,
-  rejectAdminKycProviderSubmission,
   requestApi,
   type PaginatedResponse,
 } from "@/lib/api";
@@ -19,7 +17,6 @@ import type {
   AdminAmlScreening,
   AdminKycDocument,
   AdminKycProfile,
-  AdminKycProviderSubmission,
   AdminKycRelatedPerson,
   AdminKycRequirement,
   AdminKycReviewResponse,
@@ -219,11 +216,6 @@ const AdminKycReviews = () => {
   const [updateRequestDialogOpen, setUpdateRequestDialogOpen] = useState(false);
   const [updateRequestTarget, setUpdateRequestTarget] = useState<UpdateRequestTarget | null>(null);
   const [updateRequestReason, setUpdateRequestReason] = useState("");
-  const [selectedProviderSubmission, setSelectedProviderSubmission] = useState<AdminKycProviderSubmission | null>(null);
-  const [providerAction, setProviderAction] = useState<"approve" | "reject" | null>(null);
-  const [providerReviewNote, setProviderReviewNote] = useState("");
-  const [providerRejectionReason, setProviderRejectionReason] = useState("");
-  const [providerActionError, setProviderActionError] = useState("");
   const [selectedAmlScreening, setSelectedAmlScreening] = useState<AdminAmlScreening | null>(null);
   const [amlAction, setAmlAction] = useState<"confirm" | "clear" | null>(null);
   const [amlReviewNote, setAmlReviewNote] = useState("");
@@ -277,11 +269,6 @@ const AdminKycReviews = () => {
     setUpdateRequestTarget(null);
     setUpdateRequestReason("");
     setUpdateRequestDialogOpen(false);
-    setSelectedProviderSubmission(null);
-    setProviderAction(null);
-    setProviderReviewNote("");
-    setProviderRejectionReason("");
-    setProviderActionError("");
     setSelectedAmlScreening(null);
     setAmlAction(null);
     setAmlReviewNote("");
@@ -342,7 +329,11 @@ const AdminKycReviews = () => {
         body: { review_note: approvalReviewNote.trim() || null },
       }),
     onSuccess: async (response) => {
-      await Promise.all([invalidateKycProfiles(), invalidateSelectedKycProfile()]);
+      await Promise.all([
+        invalidateKycProfiles(),
+        invalidateSelectedKycProfile(),
+        queryClient.invalidateQueries({ queryKey: ["admin", "kyc-provider-submissions", selectedUserId] }),
+      ]);
       setSelectedProfile(response.kyc_profile);
       setReviewError("");
     },
@@ -474,54 +465,6 @@ const AdminKycReviews = () => {
     },
   });
 
-  const providerApproveMutation = useMutation({
-    mutationFn: (submission: AdminKycProviderSubmission) => {
-      if (!submission.provider?.code) throw new Error("Provider is unavailable for review.");
-
-      return approveAdminKycProviderSubmission(
-        submission.user_id,
-        submission.provider.code,
-        providerReviewNote.trim() || null,
-        token,
-      );
-    },
-    onSuccess: async () => {
-      setProviderAction(null);
-      setSelectedProviderSubmission(null);
-      setProviderReviewNote("");
-      setProviderActionError("");
-      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-provider-submissions", selectedUserId] });
-    },
-    onError: (error) => {
-      setProviderActionError(error instanceof Error ? error.message : "Unable to approve provider submission.");
-    },
-  });
-
-  const providerRejectMutation = useMutation({
-    mutationFn: (submission: AdminKycProviderSubmission) => {
-      if (!submission.provider?.code) throw new Error("Provider is unavailable for review.");
-
-      return rejectAdminKycProviderSubmission(
-        submission.user_id,
-        submission.provider.code,
-        providerRejectionReason.trim(),
-        providerReviewNote.trim() || null,
-        token,
-      );
-    },
-    onSuccess: async () => {
-      setProviderAction(null);
-      setSelectedProviderSubmission(null);
-      setProviderRejectionReason("");
-      setProviderReviewNote("");
-      setProviderActionError("");
-      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-provider-submissions", selectedUserId] });
-    },
-    onError: (error) => {
-      setProviderActionError(error instanceof Error ? error.message : "Unable to reject provider submission.");
-    },
-  });
-
   const openUpdateRequestDialog = (target: UpdateRequestTarget) => {
     setUpdateRequestTarget(target);
     setUpdateRequestReason("");
@@ -537,10 +480,6 @@ const AdminKycReviews = () => {
     (screening) => !isAmlClearForApproval(screening.status, screening.compliance_decision),
   ).length;
   const selectedAmlApprovalBlocked = selectedAmlMissing || selectedBlockingAmlCount > 0;
-  const providerApprovalCompatible =
-    Boolean(selectedProfile) &&
-    ["verified", "approved"].includes(String(selectedProfile?.status).toLowerCase()) &&
-    !selectedAmlApprovalBlocked;
   const isReviewing =
     approveMutation.isPending ||
     rejectMutation.isPending ||
@@ -1112,8 +1051,6 @@ const AdminKycReviews = () => {
                       ) : providerSubmissionsQuery.data?.data.length ? (
                         <div className="space-y-3">
                           {providerSubmissionsQuery.data.data.map((submission) => {
-                            const providerCodeAvailable = Boolean(submission.provider?.code);
-
                             return (
                               <div key={submission.id} className="rounded-2xl border border-slate-200 p-4 text-sm">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1145,32 +1082,6 @@ const AdminKycReviews = () => {
                                 {submission.review_note ? (
                                   <div className="mt-3 rounded-xl bg-slate-50 p-3 text-slate-600">
                                     Review note: {submission.review_note}
-                                  </div>
-                                ) : null}
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="rounded-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                                    disabled={!providerCodeAvailable || !providerApprovalCompatible || providerApproveMutation.isPending || providerRejectMutation.isPending}
-                                    onClick={() => openProviderAction(submission, "approve")}
-                                  >
-                                    Approve provider
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    disabled={!providerCodeAvailable || providerApproveMutation.isPending || providerRejectMutation.isPending}
-                                    onClick={() => openProviderAction(submission, "reject")}
-                                  >
-                                    Reject provider
-                                  </Button>
-                                </div>
-                                {!providerApprovalCompatible ? (
-                                  <div className="mt-3 text-xs text-amber-700">
-                                    Provider approval requires verified internal KYC and a compatible AML state. The backend makes the final decision.
                                   </div>
                                 ) : null}
                               </div>
@@ -1344,87 +1255,6 @@ const AdminKycReviews = () => {
               }}
             >
               {amlAction === "confirm" ? "Confirm AML match" : "Confirm AML clear"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={providerAction !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setProviderAction(null);
-            setSelectedProviderSubmission(null);
-            setProviderReviewNote("");
-            setProviderRejectionReason("");
-            setProviderActionError("");
-          }
-        }}
-      >
-        <DialogContent className="rounded-3xl">
-          <DialogHeader>
-            <DialogTitle>{providerAction === "approve" ? "Approve provider submission" : "Reject provider submission"}</DialogTitle>
-            <DialogDescription>
-              {providerAction === "approve"
-                ? "Confirm that this verified customer can be released to the provider. The backend will revalidate KYC and AML eligibility."
-                : "Reject this provider submission with a clear reason for the internal record."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Provider</div>
-            <div className="mt-1 font-semibold text-slate-900">
-              {selectedProviderSubmission?.provider?.name || "Provider unavailable"}
-            </div>
-          </div>
-          {providerAction === "reject" ? (
-            <div className="space-y-2">
-              <Label htmlFor="provider-rejection-reason">Rejection reason</Label>
-              <Textarea
-                id="provider-rejection-reason"
-                value={providerRejectionReason}
-                onChange={(event) => {
-                  setProviderRejectionReason(event.target.value);
-                  setProviderActionError("");
-                }}
-                placeholder="Explain why this provider submission is being rejected"
-                className="min-h-28 rounded-2xl border-slate-200"
-              />
-            </div>
-          ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="provider-review-note">Review note</Label>
-            <Textarea
-              id="provider-review-note"
-              value={providerReviewNote}
-              onChange={(event) => setProviderReviewNote(event.target.value)}
-              placeholder="Optional internal note"
-              className="min-h-24 rounded-2xl border-slate-200"
-            />
-          </div>
-          {providerActionError ? (
-            <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              {providerActionError}
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setProviderAction(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className={providerAction === "approve" ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400" : "bg-red-600 text-white hover:bg-red-700"}
-              disabled={!selectedProviderSubmission || providerApproveMutation.isPending || providerRejectMutation.isPending}
-              onClick={() => {
-                if (!selectedProviderSubmission) return;
-                if (providerAction === "reject" && !providerRejectionReason.trim()) {
-                  setProviderActionError("Rejection reason is required.");
-                  return;
-                }
-                if (providerAction === "approve") providerApproveMutation.mutate(selectedProviderSubmission);
-                if (providerAction === "reject") providerRejectMutation.mutate(selectedProviderSubmission);
-              }}
-            >
-              {providerAction === "approve" ? "Confirm provider approval" : "Confirm provider rejection"}
             </Button>
           </DialogFooter>
         </DialogContent>
