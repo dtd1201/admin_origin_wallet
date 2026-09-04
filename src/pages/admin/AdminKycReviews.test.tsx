@@ -80,12 +80,8 @@ const providerSubmission: AdminKycProviderSubmission = {
   provider: { id: 8, code: "secure-provider-code", name: "Secure Provider", status: "active" },
   provider_account: { id: 41, user_id: 20, provider_id: 8, status: "pending_review" },
   submitted_at: "2026-08-24T11:00:00Z",
-  approved_at: null,
-  rejected_at: null,
   failure_reason: "Provider validation pending",
   review_note: "Awaiting compliance review",
-  reviewed_by: { ...profile.user!, full_name: "Admin Reviewer", email: "reviewer@example.test" },
-  reviewed_at: "2026-08-24T12:00:00Z",
 };
 
 const amlScreening: AdminAmlScreening = {
@@ -215,16 +211,16 @@ it("shows provider submission loading", async () => {
   apiMocks.getAdminKycProviderSubmissions.mockReturnValue(new Promise(() => undefined));
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  expect(await screen.findByText("Loading provider submissions...")).toBeInTheDocument();
+  expect(await screen.findByText("Loading Nium submission status...")).toBeInTheDocument();
 });
 
 it("shows the provider submission empty state", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  expect(await screen.findByText("No provider submissions found.")).toBeInTheDocument();
+  expect(await screen.findByText("No Nium submission has been prepared yet.")).toBeInTheDocument();
 });
 
-it("displays provider statuses and safe review fields without metadata or raw identifiers", async () => {
+it("displays Nium submission tracking without metadata or raw identifiers", async () => {
   apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({
     user: profile.user,
     data: [{ ...providerSubmission, metadata: { token: "provider-secret-token" }, external_id: "raw-external-id" }],
@@ -236,7 +232,6 @@ it("displays provider statuses and safe review fields without metadata or raw id
   expect(screen.getByText("pending_review")).toBeInTheDocument();
   expect(screen.getByText("Failure reason: Provider validation pending")).toBeInTheDocument();
   expect(screen.getByText("Review note: Awaiting compliance review")).toBeInTheDocument();
-  expect(screen.getByText("Admin Reviewer")).toBeInTheDocument();
   expect(screen.queryByText("secure-provider-code")).not.toBeInTheDocument();
   expect(screen.queryByText("provider-secret-token")).not.toBeInTheDocument();
   expect(screen.queryByText("raw-external-id")).not.toBeInTheDocument();
@@ -262,6 +257,41 @@ it("shows auto-cleared AML without manual action buttons", async () => {
   expect(await screen.findByText("AML cleared automatically")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Clear AML" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Confirm AML Match" })).not.toBeInTheDocument();
+});
+
+it("hides superseded AML and does not let it block approval", async () => {
+  const supersededScreening: AdminAmlScreening = {
+    ...amlScreening,
+    id: 50,
+    subject_name: "Historical Pending Subject",
+    status: "pending",
+    compliance_decision: "pending_review",
+    superseded_at: "2026-08-24T12:00:00Z",
+  };
+  const activeScreening: AdminAmlScreening = {
+    ...profile.aml_screenings![0],
+    superseded_at: null,
+  };
+  const profileWithHistory = {
+    ...detailProfile,
+    aml_screenings: [supersededScreening, activeScreening],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: profileWithHistory,
+    kyc_submission: profileWithHistory,
+  });
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({
+    ...pageResponse,
+    data: [supersededScreening, activeScreening],
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText("AML cleared automatically")).toBeInTheDocument();
+  expect(screen.queryByText("Historical Pending Subject")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
 it("shows pending AML without manual action buttons", async () => {

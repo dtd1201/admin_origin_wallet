@@ -338,6 +338,7 @@ export interface AdminAmlScreening {
   risk_score?: string | number | null;
   screened_at?: string | null;
   reviewed_at?: string | null;
+  superseded_at?: string | null;
   reviewed_by?: AdminUser | null;
   review_note?: string | null;
   matches?: AdminAmlMatch[];
@@ -392,7 +393,7 @@ export interface AdminKycDetailResponse {
   kyc_submission: AdminKycProfile | null;
 }
 
-export type AdminKycProviderSubmissionStatus = "pending" | "approved" | "submitted" | "rejected" | "failed";
+export type AdminKycProviderSubmissionStatus = "pending" | "submitted" | "failed";
 
 export interface AdminKycProviderAccount {
   id: number;
@@ -418,11 +419,8 @@ export interface AdminKycProviderSubmission {
   status: AdminKycProviderSubmissionStatus;
   reviewed_by_user_id?: number | null;
   reviewed_at?: string | null;
-  approved_at?: string | null;
   submitted_at?: string | null;
-  rejected_at?: string | null;
   review_note?: string | null;
-  rejection_reason?: string | null;
   failure_reason?: string | null;
   user?: AdminUser | null;
   kyc_profile?: AdminKycProfile | null;

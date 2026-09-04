@@ -134,7 +134,7 @@ const requiresManualAmlReview = (
   );
 };
 
-const isActiveAmlScreening = (status?: string | null) => String(status ?? "").toLowerCase() !== "superseded";
+const isActiveAmlScreening = (screening: AdminAmlScreening) => screening.superseded_at == null;
 
 type UpdateRequestTarget = {
   key: string;
@@ -474,7 +474,8 @@ const AdminKycReviews = () => {
 
   const selectedRequiredRequirementCount = selectedProfile ? getRequiredRequirementCount(selectedProfile) : 0;
   const selectedActiveAmlScreenings =
-    selectedProfile?.aml_screenings?.filter((screening) => isActiveAmlScreening(screening.status)) ?? [];
+    selectedProfile?.aml_screenings?.filter(isActiveAmlScreening) ?? [];
+  const displayedAmlScreenings = amlScreeningsQuery.data?.data.filter(isActiveAmlScreening) ?? [];
   const selectedAmlMissing = Boolean(selectedProfile) && selectedActiveAmlScreenings.length === 0;
   const selectedBlockingAmlCount = selectedActiveAmlScreenings.filter(
     (screening) => !isAmlClearForApproval(screening.status, screening.compliance_decision),
@@ -487,14 +488,6 @@ const AdminKycReviews = () => {
     amlClearMutation.isPending ||
     amlConfirmMutation.isPending ||
     requestUpdateMutation.isPending;
-
-  const openProviderAction = (submission: AdminKycProviderSubmission, action: "approve" | "reject") => {
-    setSelectedProviderSubmission(submission);
-    setProviderAction(action);
-    setProviderReviewNote("");
-    setProviderRejectionReason("");
-    setProviderActionError("");
-  };
 
   const openAmlAction = (screening: AdminAmlScreening, action: "confirm" | "clear") => {
     setSelectedAmlScreening(screening);
@@ -668,7 +661,7 @@ const AdminKycReviews = () => {
                   KYC/KYB review
                 </DialogTitle>
                 <DialogDescription>
-                  Internal approval must be completed before releasing the customer to provider onboarding.
+                  Approval validates KYC and active AML results, then submits the customer directly to Nium.
                 </DialogDescription>
               </DialogHeader>
               <div>
@@ -958,9 +951,9 @@ const AdminKycReviews = () => {
                             ? amlScreeningsQuery.error.message
                             : "Unable to load AML screenings."}
                         </div>
-                      ) : amlScreeningsQuery.data?.data.length ? (
+                      ) : displayedAmlScreenings.length ? (
                         <div className="space-y-3">
-                          {amlScreeningsQuery.data.data.map((screening) => (
+                          {displayedAmlScreenings.map((screening) => (
                             <div key={screening.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div>
@@ -1037,16 +1030,16 @@ const AdminKycReviews = () => {
                       )}
                     </Section>
 
-                    <Section title="Provider submissions">
+                    <Section title="Nium submission">
                       {providerSubmissionsQuery.isLoading ? (
                         <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                          Loading provider submissions...
+                          Loading Nium submission status...
                         </div>
                       ) : providerSubmissionsQuery.isError ? (
                         <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                           {providerSubmissionsQuery.error instanceof Error
                             ? providerSubmissionsQuery.error.message
-                            : "Unable to load provider submissions."}
+                            : "Unable to load Nium submission status."}
                         </div>
                       ) : providerSubmissionsQuery.data?.data.length ? (
                         <div className="space-y-3">
@@ -1066,13 +1059,6 @@ const AdminKycReviews = () => {
                                   <DetailItem label="Submission status" value={submission.status} />
                                   <DetailItem label="Provider account status" value={submission.provider_account?.status || "-"} />
                                   <DetailItem label="Submitted" value={formatDate(submission.submitted_at)} />
-                                  <DetailItem label="Approved" value={formatDate(submission.approved_at)} />
-                                  <DetailItem label="Rejected" value={formatDate(submission.rejected_at)} />
-                                  <DetailItem label="Reviewed" value={formatDate(submission.reviewed_at)} />
-                                  <DetailItem
-                                    label="Reviewed by"
-                                    value={submission.reviewed_by?.full_name || submission.reviewed_by?.email || "-"}
-                                  />
                                 </div>
                                 {submission.failure_reason ? (
                                   <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-700">
@@ -1090,7 +1076,7 @@ const AdminKycReviews = () => {
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                          No provider submissions found.
+                          No Nium submission has been prepared yet.
                         </div>
                       )}
                     </Section>
