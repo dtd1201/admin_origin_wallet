@@ -343,6 +343,26 @@ it("shows auto-cleared AML without manual action buttons", async () => {
   expect(screen.queryByRole("button", { name: "Confirm AML Match" })).not.toBeInTheDocument();
 });
 
+it("shows pending AML without manual action buttons", async () => {
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({
+    ...pageResponse,
+    data: [{ ...amlScreening, status: "pending", compliance_decision: "pending_review" }],
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  expect((await screen.findAllByText("pending")).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: "Clear AML" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Confirm AML Match" })).not.toBeInTheDocument();
+});
+
+it("shows both manual actions for AML pending manual review", async () => {
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [amlScreening] });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  expect(await screen.findByRole("button", { name: "Clear AML" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Confirm AML Match" })).toBeInTheDocument();
+});
+
 it("displays safe AML match fields without sensitive screening data", async () => {
   apiMocks.getAdminAmlScreenings.mockResolvedValue({
     ...pageResponse,
