@@ -382,6 +382,7 @@ export interface AdminKycProfile {
 
 export interface AdminKycReviewResponse {
   message?: string;
+  aml_bypass_reason?: string | null;
   user?: AdminUser;
   kyc_profile: AdminKycProfile;
   kyc_submission?: AdminKycProfile;

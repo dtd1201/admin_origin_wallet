@@ -212,6 +212,7 @@ const AdminKycReviews = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
   const [documentError, setDocumentError] = useState("");
   const [updateRequestDialogOpen, setUpdateRequestDialogOpen] = useState(false);
   const [updateRequestTarget, setUpdateRequestTarget] = useState<UpdateRequestTarget | null>(null);
@@ -336,8 +337,14 @@ const AdminKycReviews = () => {
       ]);
       setSelectedProfile(response.kyc_profile);
       setReviewError("");
+      setReviewMessage(
+        response.aml_bypass_reason === "staging_aml_provider_unavailable_bypass"
+          ? "AML provider unavailable. Staging bypass applied."
+          : "",
+      );
     },
     onError: (error) => {
+      setReviewMessage("");
       setReviewError(error instanceof Error ? error.message : "Unable to approve KYC/KYB profile.");
     },
   });
@@ -483,6 +490,7 @@ const AdminKycReviews = () => {
     setUpdateRequestTarget(target);
     setUpdateRequestReason("");
     setReviewError("");
+    setReviewMessage("");
     setUpdateRequestDialogOpen(true);
   };
 
@@ -554,6 +562,12 @@ const AdminKycReviews = () => {
           {reviewError && (
             <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {reviewError}
+            </div>
+          )}
+
+          {reviewMessage && (
+            <div role="status" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {reviewMessage}
             </div>
           )}
 
@@ -694,6 +708,12 @@ const AdminKycReviews = () => {
                     {reviewError && (
                       <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                         {reviewError}
+                      </div>
+                    )}
+
+                    {reviewMessage && (
+                      <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        {reviewMessage}
                       </div>
                     )}
 

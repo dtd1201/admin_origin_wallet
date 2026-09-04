@@ -299,6 +299,23 @@ it("shows a safe approval failure diagnostic", async () => {
   ).toHaveLength(2));
 });
 
+it("shows the staging AML provider unavailable bypass message after approval", async () => {
+  apiMocks.requestApi
+    .mockResolvedValueOnce(pageResponse)
+    .mockResolvedValueOnce({
+      message: "AML provider unavailable. Staging bypass applied.",
+      aml_bypass_reason: "staging_aml_provider_unavailable_bypass",
+      user: { ...profile.user, kyc_status: "verified" },
+      kyc_profile: { ...detailProfile, status: "verified" },
+    });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+
+  expect((await screen.findAllByText("AML provider unavailable. Staging bypass applied.")).length).toBeGreaterThan(0);
+});
+
 it("shows AML screening loading", async () => {
   apiMocks.getAdminAmlScreenings.mockReturnValue(new Promise(() => undefined));
   renderPage();
