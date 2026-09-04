@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import AdminProviderAccounts from "@/pages/admin/AdminProviderAccounts";
 import type { AdminKycProviderSubmission } from "@/types/admin";
 
@@ -35,7 +36,7 @@ const submission: AdminKycProviderSubmission = {
 const page = (data: AdminKycProviderSubmission[] = [submission]) => ({ current_page: 1, last_page: 1, total: data.length, data });
 const renderPage = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={client}><AdminProviderAccounts /></QueryClientProvider>);
+  return render(<MemoryRouter><QueryClientProvider client={client}><AdminProviderAccounts /></QueryClientProvider></MemoryRouter>);
 };
 
 beforeEach(() => {
@@ -59,6 +60,8 @@ it("renders backend provider, account, KYC, compliance, RFI, and sync states", a
   fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
   expect(screen.getByText("Provider status timestamp")).toBeInTheDocument();
   expect(screen.getByText("Transactions last synced")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "View VAN assignment evidence" })).toHaveAttribute("href", "/admin/provider-operations");
+  expect(screen.getByText(/Live virtual-account inventory is not available from the current API/)).toBeInTheDocument();
 });
 
 it("synchronizes through the existing authoritative provider endpoint", async () => {

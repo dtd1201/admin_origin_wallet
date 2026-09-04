@@ -172,7 +172,7 @@ const AdminRfiCases = () => {
                 <MessagesSquare className="h-6 w-6 text-emerald-600" />
                 RFI cases
               </CardTitle>
-              <CardDescription>Read-only operational visibility into existing Nium RFI cases.</CardDescription>
+              <CardDescription>Backend-authoritative RFI workflow with factual drafting, human approval, provider submission, and reconciliation state.</CardDescription>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <Select value={scope} onValueChange={(value) => { setScope(value as AdminRfiScope | "all"); setPage(1); }}>

@@ -64,7 +64,14 @@ const profile: AdminKycProfile = {
     original_name: null,
   }],
   related_persons: [],
-  aml_screenings: [{ id: 4, subject_name: "List Business Name", subject_role: "business", screening_provider: "internal", status: "clear" }],
+  aml_screenings: [{
+    id: 4,
+    subject_name: "List Business Name",
+    subject_role: "business",
+    screening_provider: "internal",
+    status: "completed",
+    compliance_decision: "clear",
+  }],
 };
 
 const detailProfile: AdminKycProfile = { ...profile, legal_name: "Detail Legal Name", business_name: "Detail Business Name" };
@@ -92,7 +99,8 @@ const amlScreening: AdminAmlScreening = {
   subject_name: "Sensitive Subject Name",
   subject_role: "business",
   screening_provider: "internal",
-  status: "potential_match",
+  status: "manual_review",
+  compliance_decision: "pending_review",
   created_at: "2026-08-24T09:00:00Z",
   screened_at: "2026-08-24T10:00:00Z",
   reviewed_at: "2026-08-24T11:00:00Z",
@@ -326,6 +334,35 @@ it("shows the AML empty state", async () => {
   expect(await screen.findByText("No AML screenings found.")).toBeInTheDocument();
 });
 
+it("shows auto-cleared AML without manual action buttons", async () => {
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [profile.aml_screenings![0]] });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  expect(await screen.findByText("AML cleared automatically")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Clear AML" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Confirm AML Match" })).not.toBeInTheDocument();
+});
+
+it("shows pending AML without manual action buttons", async () => {
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({
+    ...pageResponse,
+    data: [{ ...amlScreening, status: "pending", compliance_decision: "pending_review" }],
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  expect((await screen.findAllByText("pending")).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: "Clear AML" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Confirm AML Match" })).not.toBeInTheDocument();
+});
+
+it("shows both manual actions for AML pending manual review", async () => {
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [amlScreening] });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  expect(await screen.findByRole("button", { name: "Clear AML" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Confirm AML Match" })).toBeInTheDocument();
+});
+
 it("displays safe AML match fields without sensitive screening data", async () => {
   apiMocks.getAdminAmlScreenings.mockResolvedValue({
     ...pageResponse,
@@ -348,7 +385,7 @@ it("confirms an AML match after confirmation", async () => {
   apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [amlScreening] });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm match" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm AML Match" }));
   fireEvent.change(screen.getByLabelText("Review note"), { target: { value: "True match confirmed" } });
   fireEvent.click(screen.getByRole("button", { name: "Confirm AML match" }));
   await waitFor(() => expect(apiMocks.confirmAdminAmlMatch).toHaveBeenCalledWith(
@@ -373,7 +410,7 @@ it("shows AML validation errors", async () => {
   apiMocks.confirmAdminAmlMatch.mockRejectedValue(new Error("AML screening cannot be confirmed."));
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm match" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm AML Match" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm AML match" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("AML screening cannot be confirmed.");
 });

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, RefreshCcw, ServerCog } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,6 +82,12 @@ const AdminProviderAccounts = () => {
           <div className="grid gap-3 sm:grid-cols-2"><Detail label="Provider" value={getProviderDisplayName(selected.provider)} /><Detail label="Customer reference" value={maskAdminIdentifier(selected.user_id)} /><Detail label="Account status" value={safeStatus(selected.provider_account.status)} /><Detail label="KYC status" value={safeStatus(selected.kyc_profile?.status || selected.status)} /><Detail label="Provider state" value={safeStatus(selected.provider_account.provider_status)} /><Detail label="Provider sub-state" value={safeStatus(selected.provider_account.provider_sub_status)} /><Detail label="Compliance state" value={safeStatus(selected.provider_account.compliance_status)} /><Detail label="RFI state" value={safeStatus(selected.provider_account.rfi_status)} /><Detail label="Provider status timestamp" value={formatDate(selected.provider_account.provider_status_updated_at)} /><Detail label="Transactions last synced" value={formatDate(selected.provider_account.transactions_last_synced_at)} /><Detail label="Record updated" value={formatDate(selected.provider_account.updated_at)} /></div>
           {actionMessage ? <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{actionMessage}</div> : null}
           {actionError ? <ErrorPanel message={actionError} /> : null}
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+            Live virtual-account inventory is not available from the current API. Review backend-projected historical assignment records under provider operations.
+            <Button asChild type="button" variant="link" className="ml-1 h-auto p-0 font-semibold text-blue-900 underline">
+              <Link to="/admin/provider-operations">View VAN assignment evidence</Link>
+            </Button>
+          </div>
           <Button type="button" className="w-full" disabled={syncMutation.isPending || !selected.provider?.code} onClick={() => syncMutation.mutate(selected)}><RefreshCcw className={syncMutation.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />{syncMutation.isPending ? "Synchronizing..." : "Synchronize provider account"}</Button>
           <p className="text-xs leading-5 text-slate-500">Nium remains the provider authority. This action requests backend synchronization and does not edit provider state locally.</p>
         </div> : <div className="rounded-3xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500">Select a provider account from the loaded submission records.</div>}</CardContent>

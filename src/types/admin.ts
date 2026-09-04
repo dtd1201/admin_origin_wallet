@@ -333,6 +333,7 @@ export interface AdminAmlScreening {
   subject_role: string;
   screening_provider: string;
   status: string;
+  compliance_decision?: string | null;
   risk_level?: string | null;
   risk_score?: string | number | null;
   screened_at?: string | null;
