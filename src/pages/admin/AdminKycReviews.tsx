@@ -502,7 +502,14 @@ const AdminKycReviews = () => {
   const selectedBlockingAmlCount = selectedActiveAmlScreenings.filter(
     (screening) => !isAmlClearForApproval(screening.status, screening.compliance_decision),
   ).length;
-  const selectedAmlApprovalBlocked = selectedAmlMissing || selectedBlockingAmlCount > 0;
+  const selectedAmlProviderUnavailableBypass =
+    selectedActiveAmlScreenings.length > 0 &&
+    selectedActiveAmlScreenings.every(
+      (screening) =>
+        screening.provider === "unconfigured" && screening.result_summary?.error === "provider_failure",
+    );
+  const selectedAmlApprovalBlocked =
+    selectedAmlMissing || (!selectedAmlProviderUnavailableBypass && selectedBlockingAmlCount > 0);
   const isReviewing =
     approveMutation.isPending ||
     rejectMutation.isPending ||

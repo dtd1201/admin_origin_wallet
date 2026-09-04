@@ -332,6 +332,7 @@ export interface AdminAmlScreening {
   subject_name: string;
   subject_role: string;
   screening_provider: string;
+  provider?: string | null;
   status: string;
   compliance_decision?: string | null;
   risk_level?: string | null;
@@ -341,6 +342,7 @@ export interface AdminAmlScreening {
   superseded_at?: string | null;
   reviewed_by?: AdminUser | null;
   review_note?: string | null;
+  result_summary?: Record<string, unknown> | null;
   matches?: AdminAmlMatch[];
   created_at?: string | null;
   updated_at?: string | null;

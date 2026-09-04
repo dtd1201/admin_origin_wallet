@@ -373,6 +373,55 @@ it("hides superseded AML and does not let it block approval", async () => {
   expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
+it("allows approval for the exact AML provider unavailable bypass without hiding failed status", async () => {
+  const unavailableScreening: AdminAmlScreening = {
+    ...amlScreening,
+    screening_provider: "unconfigured",
+    provider: "unconfigured",
+    status: "failed",
+    compliance_decision: "pending_review",
+    result_summary: { error: "provider_failure" },
+    matches: [],
+  };
+  const bypassProfile = { ...detailProfile, aml_screenings: [unavailableScreening] };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: bypassProfile,
+    kyc_submission: bypassProfile,
+  });
+  apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [unavailableScreening] });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect((await screen.findAllByText("failed")).length).toBeGreaterThan(0);
+  expect(screen.getByText("unconfigured")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  expect(screen.queryByText("Clear or manually clear all active AML screenings before approving this profile.")).not.toBeInTheDocument();
+});
+
+it("keeps approval blocked when an unavailable-provider AML record has a different error", async () => {
+  const failedScreening: AdminAmlScreening = {
+    ...amlScreening,
+    provider: "unconfigured",
+    status: "failed",
+    compliance_decision: "pending_review",
+    result_summary: { error: "screening_match" },
+  };
+  const blockedProfile = { ...detailProfile, aml_screenings: [failedScreening] };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: blockedProfile,
+    kyc_submission: blockedProfile,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
+  expect(screen.getByText("Clear or manually clear all active AML screenings before approving this profile.")).toBeInTheDocument();
+});
+
 it("shows pending AML without manual action buttons", async () => {
   apiMocks.getAdminAmlScreenings.mockResolvedValue({
     ...pageResponse,
