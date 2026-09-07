@@ -176,6 +176,20 @@ const requiresManualAmlReview = (
 };
 
 const isActiveAmlScreening = (screening: AdminAmlScreening) => screening.superseded_at == null;
+const isDisplayableAmlScreening = (screening: AdminAmlScreening) => {
+  const hasRealProvider = [screening.screening_provider, screening.provider]
+    .some((provider) => provider != null && provider !== "" && provider !== "unconfigured");
+  const hasMeaningfulResult = Boolean(
+    screening.matches?.length
+    || screening.risk_level
+    || screening.risk_score != null
+    || ["completed", "manual_review"].includes(screening.status)
+    || ["clear", "match", "rejected"].includes(screening.compliance_decision ?? "")
+    || (screening.result_summary && screening.result_summary.error !== "provider_failure"),
+  );
+
+  return hasRealProvider || hasMeaningfulResult;
+};
 
 type UpdateRequestTarget = {
   key: string;
@@ -540,7 +554,11 @@ const AdminKycReviews = () => {
     : false;
   const selectedActiveAmlScreenings =
     selectedProfile?.aml_screenings?.filter(isActiveAmlScreening) ?? [];
-  const displayedAmlScreenings = amlScreeningsQuery.data?.data.filter(isActiveAmlScreening) ?? [];
+  const displayedAmlScreenings = amlScreeningsQuery.data?.data
+    .filter(isActiveAmlScreening)
+    .filter(isDisplayableAmlScreening) ?? [];
+  const hasDisplayableAmlScreenings = selectedActiveAmlScreenings.some(isDisplayableAmlScreening)
+    || displayedAmlScreenings.length > 0;
   const selectedAmlMissing = Boolean(selectedProfile) && selectedActiveAmlScreenings.length === 0;
   const selectedBlockingAmlCount = selectedActiveAmlScreenings.filter(
     (screening) => !isAmlClearForApproval(screening.status, screening.compliance_decision),
@@ -1024,7 +1042,7 @@ const AdminKycReviews = () => {
                       </div>
                     </Section>
 
-                    <Section title="AML screenings">
+                    {hasDisplayableAmlScreenings ? <Section title="AML screenings">
                       {amlScreeningsQuery.isLoading ? (
                         <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
                           Loading AML screenings...
@@ -1112,7 +1130,7 @@ const AdminKycReviews = () => {
                           No AML screenings found.
                         </div>
                       )}
-                    </Section>
+                    </Section> : null}
 
                     <Section title="Nium submission">
                       {providerSubmissionsQuery.isLoading ? (

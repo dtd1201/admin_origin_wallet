@@ -542,7 +542,7 @@ it("hides superseded AML and does not let it block approval", async () => {
   expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
-it("allows approval for the exact AML provider unavailable bypass without hiding failed status", async () => {
+it("allows approval for the exact AML provider unavailable bypass without displaying AML details", async () => {
   const unavailableScreening: AdminAmlScreening = {
     ...amlScreening,
     screening_provider: "unconfigured",
@@ -563,9 +563,10 @@ it("allows approval for the exact AML provider unavailable bypass without hiding
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
 
-  expect((await screen.findAllByText("failed")).length).toBeGreaterThan(0);
-  expect(screen.getByText("unconfigured")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  expect(await screen.findByRole("button", { name: "Approve" })).toBeEnabled();
+  expect(screen.queryByText("AML screenings")).not.toBeInTheDocument();
+  expect(screen.queryByText("unconfigured")).not.toBeInTheDocument();
+  expect(screen.queryByText("No AML matches found.")).not.toBeInTheDocument();
   expect(screen.queryByText("Clear or manually clear all active AML screenings before approving this profile.")).not.toBeInTheDocument();
 });
 
