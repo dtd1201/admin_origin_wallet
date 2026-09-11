@@ -115,16 +115,17 @@ const AdminTransactions = () => {
 
   const approveMutation = useMutation({
     mutationFn: async (transferId: number) =>
-      requestApi<{ message?: string }>(`${adminEndpointConfig.transfers}/${transferId}/approve`, {
+      requestApi<{ message?: string; transfer?: AdminTransfer }>(`${adminEndpointConfig.transfers}/${transferId}/approve`, {
         method: "POST",
         token,
         body: {},
       }),
     onSuccess: async (response) => {
       await invalidateTransfers();
+      await queryClient.invalidateQueries({ queryKey: ["admin", "transfer", selectedTransferId, token] });
       toast({
-        title: "Transfer approved",
-        description: response.message || "The transfer can now be submitted to the provider.",
+        title: response.transfer?.status === "pending" ? "Transfer approved and submitted" : "Transfer approved",
+        description: response.message || "The transfer approval was recorded.",
       });
     },
     onError: (error) => {
@@ -375,7 +376,7 @@ const AdminTransactions = () => {
           {selectedTransfer && (
             <DialogFooter className="gap-2 sm:gap-0">
               {canReject(selectedTransfer) && <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" disabled={mutationPending} onClick={() => setPendingAction("reject")}>Reject</Button>}
-              {canApprove(selectedTransfer) && <Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={mutationPending} onClick={() => setPendingAction("approve")}>Approve</Button>}
+              {canApprove(selectedTransfer) && <Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={mutationPending} onClick={() => setPendingAction("approve")}>{selectedTransfer.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Approve"}</Button>}
             </DialogFooter>
           )}
         </DialogContent>
@@ -384,12 +385,12 @@ const AdminTransactions = () => {
       <AlertDialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) setPendingAction(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{pendingAction === "approve" ? "Approve this transfer?" : "Reject this transfer?"}</AlertDialogTitle>
+            <AlertDialogTitle>{pendingAction === "approve" ? (selectedTransfer?.provider?.code?.toLowerCase() === "nium" ? "Approve and submit this transfer?" : "Approve this transfer?") : "Reject this transfer?"}</AlertDialogTitle>
             <AlertDialogDescription>This action changes the transfer workflow. Confirm only after reviewing the transfer details.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmAction}>{pendingAction === "approve" ? "Confirm approval" : "Confirm rejection"}</AlertDialogAction>
+            <AlertDialogAction disabled={mutationPending} onClick={confirmAction}>{pendingAction === "approve" ? (selectedTransfer?.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Confirm approval") : "Confirm rejection"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
