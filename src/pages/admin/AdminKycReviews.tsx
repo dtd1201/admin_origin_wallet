@@ -131,9 +131,12 @@ const hasBlockingRequiredRequirements = (profile: AdminKycProfile) => {
   const hasBusinessRegistration = profile.documents?.some(
     (document) =>
       ["submitted", "approved", "verified"].includes(String(document.status).toLowerCase()) &&
-      ["business_registration", "certificate_of_incorporation"].includes(
-        String(document.type).toLowerCase(),
-      ),
+      String(document.type).toLowerCase() === "business_registration",
+  ) ?? false;
+  const hasCertificateOfIncorporation = profile.documents?.some(
+    (document) =>
+      ["submitted", "approved", "verified"].includes(String(document.status).toLowerCase()) &&
+      String(document.type).toLowerCase() === "certificate_of_incorporation",
   ) ?? false;
   const blockingKeys = [
     "authorized_representative",
@@ -152,7 +155,7 @@ const hasBlockingRequiredRequirements = (profile: AdminKycProfile) => {
     blockingKeys.push("ownership_structure");
   }
 
-  return !hasBusinessRegistration || blockingKeys.some((key) => requiredKeys.has(key));
+  return !hasBusinessRegistration || !hasCertificateOfIncorporation || blockingKeys.some((key) => requiredKeys.has(key));
 };
 
 const isAmlClearForApproval = (
@@ -818,6 +821,8 @@ const AdminKycReviews = () => {
                             />
                             <DetailItem label="Tax ID" value={maskSensitiveValue(selectedProfile.tax_id)} />
                             <DetailItem label="Registered country" value={selectedProfile.registered_country_code || "-"} />
+                            <DetailItem label="Business website" value={String(selectedProfile.metadata?.business_website ?? "").trim() || "-"} />
+                            <DetailItem label="Business activity" value={String(selectedProfile.metadata?.business_activity ?? "").trim() || "-"} />
                           </>
                         )}
                         <DetailItem
