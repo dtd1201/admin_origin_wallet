@@ -130,13 +130,14 @@ const hasBlockingRequiredRequirements = (profile: AdminKycProfile) => {
 
   const hasBusinessRegistration = profile.documents?.some(
     (document) =>
-      ["submitted", "approved", "verified"].includes(String(document.status).toLowerCase()) &&
-      String(document.type).toLowerCase() === "business_registration",
-  ) ?? false;
-  const hasCertificateOfIncorporation = profile.documents?.some(
-    (document) =>
-      ["submitted", "approved", "verified"].includes(String(document.status).toLowerCase()) &&
-      String(document.type).toLowerCase() === "certificate_of_incorporation",
+      ["submitted", "approved", "verified"].includes(
+        String(document.status).toLowerCase()
+      ) &&
+      [
+        "business_registration",
+        "business_registration_doc",
+        "certificate_of_incorporation",
+      ].includes(String(document.type).toLowerCase()),
   ) ?? false;
   const blockingKeys = [
     "authorized_representative",
@@ -155,7 +156,10 @@ const hasBlockingRequiredRequirements = (profile: AdminKycProfile) => {
     blockingKeys.push("ownership_structure");
   }
 
-  return !hasBusinessRegistration || !hasCertificateOfIncorporation || blockingKeys.some((key) => requiredKeys.has(key));
+  return (
+    !hasBusinessRegistration ||
+    blockingKeys.some((key) => requiredKeys.has(key))
+  );
 };
 
 const isAmlClearForApproval = (
