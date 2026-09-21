@@ -387,16 +387,16 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
                     </div>
 
                     <div className="mt-4 overflow-x-auto">
-                      <Table className="min-w-[880px]">
+                      <Table className="min-w-[720px] table-fixed xl:min-w-0">
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Audience</TableHead>
-                            <TableHead>Currency pair</TableHead>
-                            <TableHead>Buy</TableHead>
-                            <TableHead>Sell</TableHead>
-                            <TableHead>Mid</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead className="w-[14%]">Audience</TableHead>
+                            <TableHead className="w-[20%]">Currency pair</TableHead>
+                            <TableHead className="w-[11%]">Buy</TableHead>
+                            <TableHead className="w-[11%]">Sell</TableHead>
+                            <TableHead className="w-[11%]">Mid</TableHead>
+                            <TableHead className="w-[13%]">Status</TableHead>
+                            <TableHead className="w-[20%] text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -454,18 +454,18 @@ const AdminExchangeRates = ({ mode = "provider" }: AdminExchangeRatesProps) => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table className="min-w-[980px]">
+              <Table className="min-w-[820px] table-fixed xl:min-w-0">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Audience</TableHead>
-                    <TableHead>Pair</TableHead>
-                    <TableHead>Buy</TableHead>
-                    <TableHead>Sell</TableHead>
-                    <TableHead>Mid</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[15%]">Source</TableHead>
+                    <TableHead className="w-[10%]">Type</TableHead>
+                    <TableHead className="w-[12%]">Audience</TableHead>
+                    <TableHead className="w-[12%]">Pair</TableHead>
+                    <TableHead className="w-[10%]">Buy</TableHead>
+                    <TableHead className="w-[10%]">Sell</TableHead>
+                    <TableHead className="w-[10%]">Mid</TableHead>
+                    <TableHead className="w-[11%]">Status</TableHead>
+                    <TableHead className="w-[10%] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
