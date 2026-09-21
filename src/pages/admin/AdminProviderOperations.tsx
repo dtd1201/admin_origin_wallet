@@ -208,8 +208,8 @@ const AdminProviderOperations = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.7fr)]">
+        <div className="min-w-0 space-y-6">
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -271,15 +271,15 @@ const AdminProviderOperations = () => {
                 </div>
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
                   <div className="overflow-x-auto">
-                    <Table className="min-w-[900px]">
+                    <Table className="min-w-[760px] table-fixed 2xl:min-w-0">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Provider</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Latency</TableHead>
-                          <TableHead>Last success</TableHead>
-                          <TableHead>Last failure</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
+                          <TableHead className="w-[28%]">Provider</TableHead>
+                          <TableHead className="w-[13%]">Status</TableHead>
+                          <TableHead className="w-[10%]">Latency</TableHead>
+                          <TableHead className="w-[18%]">Last success</TableHead>
+                          <TableHead className="w-[18%]">Last failure</TableHead>
+                          <TableHead className="w-[13%] text-right">Action</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -287,7 +287,7 @@ const AdminProviderOperations = () => {
                           healthRows.map((row) => (
                             <TableRow key={`${row.provider_code}-${row.id ?? row.last_checked_at ?? "health"}`}>
                               <TableCell>
-                                <div className="font-semibold text-slate-950">{getProviderLabel(row.provider_code, row.provider)}</div>
+                                <div className="break-words font-semibold leading-5 text-slate-950">{getProviderLabel(row.provider_code, row.provider)}</div>
                                 <div className="text-xs text-slate-500">{row.environment || "environment unknown"}</div>
                                 {row.error_message && <div className="mt-2 text-xs text-red-600">Error category: {getAdminErrorCategory(row.error_message)}</div>}
                               </TableCell>
@@ -295,8 +295,8 @@ const AdminProviderOperations = () => {
                                 <Badge className={statusClassName(row.status)}>{row.status}</Badge>
                               </TableCell>
                               <TableCell>{row.latency_ms ? `${row.latency_ms} ms` : "-"}</TableCell>
-                              <TableCell>{formatDate(row.last_success_at || row.last_checked_at)}</TableCell>
-                              <TableCell>{formatDate(row.last_failure_at)}</TableCell>
+                              <TableCell className="text-xs leading-5">{formatDate(row.last_success_at || row.last_checked_at)}</TableCell>
+                              <TableCell className="text-xs leading-5">{formatDate(row.last_failure_at)}</TableCell>
                               <TableCell>
                                 <div className="flex justify-end">
                                   <Button
@@ -350,16 +350,16 @@ const AdminProviderOperations = () => {
 
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
                   <div className="overflow-x-auto">
-                    <Table className="min-w-[980px]">
+                    <Table className="min-w-[840px] table-fixed 2xl:min-w-0">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Event</TableHead>
-                          <TableHead>Provider</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Attempts</TableHead>
-                          <TableHead>Received</TableHead>
-                          <TableHead>Next retry</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className="w-[27%]">Event</TableHead>
+                          <TableHead className="w-[17%]">Provider</TableHead>
+                          <TableHead className="w-[10%]">Status</TableHead>
+                          <TableHead className="w-[8%]">Attempts</TableHead>
+                          <TableHead className="w-[14%]">Received</TableHead>
+                          <TableHead className="w-[12%]">Next retry</TableHead>
+                          <TableHead className="w-[12%] text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -367,26 +367,26 @@ const AdminProviderOperations = () => {
                           webhookRows.map((event) => (
                             <TableRow key={event.id} className={selectedEvent?.id === event.id ? "bg-emerald-50/70" : undefined}>
                               <TableCell>
-                                <div className="font-semibold text-slate-950">{event.event_type}</div>
-                                <div className="text-xs text-slate-500">{String(event.event_id || event.related_reference || event.id)}</div>
+                                <div className="break-words font-semibold leading-5 text-slate-950">{event.event_type}</div>
+                                <div className="mt-1 break-all text-xs leading-5 text-slate-500">{String(event.event_id || event.related_reference || event.id)}</div>
                                 {event.error_message && <div className="mt-2 text-xs text-red-600">Error category: {getAdminErrorCategory(event.error_message)}</div>}
                               </TableCell>
-                              <TableCell>{getProviderLabel(event.provider_code, event.provider)}</TableCell>
+                              <TableCell className="break-words text-sm leading-5">{getProviderLabel(event.provider_code, event.provider)}</TableCell>
                               <TableCell>
                                 <Badge className={statusClassName(event.status)}>{event.status}</Badge>
                               </TableCell>
                               <TableCell>{event.attempts ?? 0}</TableCell>
-                              <TableCell>{formatDate(event.received_at)}</TableCell>
-                              <TableCell>{formatDate(event.next_retry_at)}</TableCell>
+                              <TableCell className="text-xs leading-5">{formatDate(event.received_at)}</TableCell>
+                              <TableCell className="text-xs leading-5">{formatDate(event.next_retry_at)}</TableCell>
                               <TableCell>
-                                <div className="flex justify-end gap-2">
-                                  <Button size="sm" variant="outline" onClick={() => setSelectedEvent(event)}>
+                                <div className="flex flex-col items-end gap-2">
+                                  <Button className="w-[82px] justify-center" size="sm" variant="outline" onClick={() => setSelectedEvent(event)}>
                                     Inspect
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                    className="w-[82px] justify-center border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
                                     disabled={retryWebhookMutation.isPending}
                                     onClick={() => void retryWebhookMutation.mutateAsync(event.id)}
                                   >
@@ -427,7 +427,7 @@ const AdminProviderOperations = () => {
           </Card>
         </div>
 
-        <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+        <Card className="min-w-0 rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Webhook className="h-5 w-5 text-emerald-600" />
@@ -450,7 +450,7 @@ const AdminProviderOperations = () => {
                     <Badge variant="outline">{selectedEvent.attempts ?? 0} attempts</Badge>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                   <SafeDetail label="Local event ID" value={String(selectedEvent.id)} />
                   <SafeDetail label="Provider event reference" value={String(selectedEvent.event_id || selectedEvent.related_reference || "-")} />
                   <SafeDetail label="Event type" value={selectedEvent.event_type} />
@@ -464,7 +464,7 @@ const AdminProviderOperations = () => {
                 {selectedEvent.payload && Object.keys(selectedEvent.payload).some((key) => safeWebhookPayloadFields.has(key)) ? (
                   <div className="rounded-3xl border border-slate-200 bg-white p-4">
                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Backend-projected provider evidence</div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                       {Object.entries(selectedEvent.payload).filter(([key]) => safeWebhookPayloadFields.has(key)).map(([key, value]) => (
                         <SafeDetail
                           key={key}
@@ -504,7 +504,7 @@ function SignalCard({ icon: Icon, title, value }: { icon: typeof Building2; titl
 }
 
 function SafeDetail({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 break-words text-sm font-semibold text-slate-950">{value}</div></div>;
+  return <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{value}</div></div>;
 }
 
 export default AdminProviderOperations;
