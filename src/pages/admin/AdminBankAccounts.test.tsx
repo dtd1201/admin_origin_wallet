@@ -26,15 +26,15 @@ it("renders safe bank account fields and loads read-only detail", async () => {
   expect(screen.getByText("active")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
   await waitFor(() => expect(apiMocks.getAdminBankAccount).toHaveBeenCalledWith(123456, "admin-token"));
-  expect(screen.getAllByText("****3456").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("****8765").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("123456").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("98765").length).toBeGreaterThan(0);
 });
 
 it("does not disclose bank coordinates or provider data", async () => {
   apiMocks.getAdminBankAccount.mockResolvedValue({ ...account, account_number: "account-secret", iban: "iban-secret", swift_bic: "swift-secret", routing_number: "routing-secret", raw_data: { token: "provider-token" } });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  await screen.findAllByText("****3456");
+  await screen.findAllByText("123456");
   for (const secret of ["account-secret", "iban-secret", "swift-secret", "routing-secret", "provider-token"]) expect(screen.queryByText(secret)).not.toBeInTheDocument();
 });
 

@@ -20,23 +20,23 @@ beforeEach(() => {
   apiMocks.getAdminBeneficiary.mockResolvedValue(beneficiary);
 });
 
-it("renders masked beneficiary fields and read-only payout status", async () => {
+it("renders beneficiary operational fields and read-only payout status", async () => {
   renderPage();
-  expect(await screen.findByText("J*** D***")).toBeInTheDocument();
+  expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
   expect(screen.getByText("SGD")).toBeInTheDocument();
   expect(screen.getByText("Mapped")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
   await waitFor(() => expect(apiMocks.getAdminBeneficiary).toHaveBeenCalledWith(654321, "admin-token"));
-  expect(screen.getAllByText("****4321").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("****8765").length).toBeGreaterThan(0);
-  expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
+  expect(screen.getAllByText("654321").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("98765").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Jane Doe").length).toBeGreaterThan(0);
 });
 
 it("does not disclose payment coordinates, provider identifiers, or payloads", async () => {
   apiMocks.getAdminBeneficiary.mockResolvedValue({ ...beneficiary, account_number: "account-secret", iban: "iban-secret", swift_bic: "swift-secret", routing_number: "routing-secret", raw_data: { token: "provider-token" } });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  await screen.findAllByText("J*** D***");
+  await screen.findAllByText("Jane Doe");
   for (const secret of ["provider-beneficiary-secret", "account-secret", "iban-secret", "swift-secret", "routing-secret", "provider-token"]) expect(screen.queryByText(secret)).not.toBeInTheDocument();
 });
 

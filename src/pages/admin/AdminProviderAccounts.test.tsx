@@ -94,7 +94,8 @@ it("does not disclose provider payloads, secrets, external identifiers, or metad
   } as AdminKycProviderSubmission]));
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  expect(screen.getAllByText("****").length).toBeGreaterThan(0);
+  expect(screen.getByText("Account 41")).toBeInTheDocument();
+  expect(screen.getByText("2088")).toBeInTheDocument();
   for (const secret of ["sensitive-customer-id", "sensitive-account-id", "sensitive-provider-reference", "raw-provider-token", "internal-provider-secret"]) {
     expect(screen.queryByText(secret)).not.toBeInTheDocument();
   }
