@@ -156,8 +156,8 @@ const AdminRfiCases = () => {
   const rows = casesQuery.data?.data ?? [];
   const canGoBack = (casesQuery.data?.current_page ?? page) > 1;
   const canGoNext = (casesQuery.data?.current_page ?? page) < (casesQuery.data?.last_page ?? page);
-  const canDraft = detailQuery.data?.status === "requested" && ["not_claimed", "draft"].includes(detailQuery.data.submission_state);
-  const canApprove = detailQuery.data?.status === "requested" && detailQuery.data.submission_state === "draft";
+  const canDraft = detailQuery.data?.scope === "transaction" && detailQuery.data.status === "requested" && ["not_claimed", "draft"].includes(detailQuery.data.submission_state);
+  const canApprove = detailQuery.data?.scope === "transaction" && detailQuery.data.status === "requested" && detailQuery.data.submission_state === "draft";
   const canSubmit = detailQuery.data?.scope === "transaction" && detailQuery.data.status === "requested" && detailQuery.data.submission_state === "approved";
   const requiredData = requiredDataSummary(detailQuery.data?.evidence);
   const authoritativeClear = detailQuery.data?.status === "resolved_authoritative_clear";
@@ -268,7 +268,7 @@ const AdminRfiCases = () => {
                   <p className="mt-1 text-sm text-slate-600">Recorded response content and review provenance returned by the backend.</p>
                   {detailQuery.data.response_draft?.length ? <div className="mt-4 space-y-3">{detailQuery.data.response_draft.map((answer, index) => <div key={`${answer.questionId || "answer"}-${index}`} className="rounded-2xl bg-slate-50 p-4"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{answer.questionId || `Response ${index + 1}`}</div><div className="mt-2 whitespace-pre-wrap text-sm text-slate-900">{factualValue(answer.answer)}</div><div className="mt-2 text-xs text-slate-500">{answer.provenance?.source || "review provenance unavailable"}{answer.provenance?.recorded_at ? ` - ${formatDate(answer.provenance.recorded_at)}` : ""}</div></div>)}</div> : <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No response draft is recorded.</div>}
                 </div>
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                {detailQuery.data.scope === "transaction" ? <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div><div className="font-semibold text-slate-950">Factual response draft</div><div className="mt-1 text-sm text-slate-600">Enter explicit question IDs and factual answers only. Evidence, provider payloads, reviewer metadata, and file identifiers remain hidden.</div></div>
                     <Button type="button" size="sm" variant="outline" disabled={!canDraft || draftMutation.isPending} onClick={() => setAnswers((current) => [...current, { questionId: "", answer: "" }])}><Plus className="h-4 w-4" />Add item</Button>
@@ -291,7 +291,7 @@ const AdminRfiCases = () => {
                   </div>
                   <Button type="button" className="mt-2 w-full" disabled={!canSubmit || submitMutation.isPending} onClick={() => setSubmitOpen(true)}><Send className="h-4 w-4" />Submit approved transaction RFI</Button>
                   <p className="mt-2 text-xs text-slate-500">Submission uses the existing authenticated backend endpoint and is disabled as soon as the backend advances the case state.</p>
-                </div>
+                </div> : <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">Corporate RFI is reconciled from Nium authoritative status. Provider response submission is not enabled.</div>}
               </div>
             ) : !detailQuery.isLoading && !detailQuery.isError ? <div className="rounded-3xl border border-dashed border-slate-300 py-16 text-center text-slate-500">Select an RFI case to inspect.</div> : null}
           </CardContent>

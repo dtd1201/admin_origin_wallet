@@ -139,8 +139,17 @@ it("requires confirmation before submitting an approved transaction RFI", async 
   await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(17, "admin-token"));
 });
 
+it("keeps customer RFI read-only without Draft, Approve, or Submit actions", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
+  expect(await screen.findByText("Corporate RFI is reconciled from Nium authoritative status. Provider response submission is not enabled.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Approve draft" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Submit approved transaction RFI" })).not.toBeInTheDocument();
+});
+
 it("saves a factual draft through the existing endpoint", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, submission_state: "not_claimed" });
+  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "not_claimed" });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
   fireEvent.change(await screen.findByLabelText("Question ID"), { target: { value: "business-purpose" } });
@@ -152,6 +161,7 @@ it("saves a factual draft through the existing endpoint", async () => {
 });
 
 it("requires confirmation before approving a draft", async () => {
+  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction" });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
   fireEvent.click(await screen.findByRole("button", { name: "Approve draft" }));
@@ -190,7 +200,7 @@ it("labels CLEAR only for the backend authoritative resolved state", async () =>
 });
 
 it("shows draft API errors without exposing hidden detail fields", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, submission_state: "not_claimed", evidence: { secret: "hidden-evidence" } });
+  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "not_claimed", evidence: { secret: "hidden-evidence" } });
   apiMocks.saveAdminRfiDraft.mockRejectedValue(new Error("Draft validation failed"));
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
