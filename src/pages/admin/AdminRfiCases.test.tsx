@@ -133,19 +133,27 @@ it("requires confirmation before submitting an approved transaction RFI", async 
   apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "approved" });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Submit approved transaction RFI" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Submit approved Transaction RFI" }));
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Confirm submission" }));
   await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(17, "admin-token"));
 });
 
-it("keeps customer RFI read-only without Draft, Approve, or Submit actions", async () => {
+it("enables customer Draft and Approve actions for a requested draft", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  expect(await screen.findByText("Corporate RFI is reconciled from Nium authoritative status. Provider response submission is not enabled.")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Approve draft" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Submit approved transaction RFI" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Save draft" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Approve draft" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Submit approved Corporate RFI" })).toBeDisabled();
+});
+
+it("enables customer Submit only for a requested approved case", async () => {
+  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, submission_state: "approved", approved_at: "2026-08-24T11:00:00Z" });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
+  expect(await screen.findByRole("button", { name: "Save draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Approve draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Submit approved Corporate RFI" })).toBeEnabled();
 });
 
 it("saves a factual draft through the existing endpoint", async () => {
