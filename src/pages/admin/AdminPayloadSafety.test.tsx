@@ -78,25 +78,71 @@ it("presents masked NIUM virtual account assignment evidence from the webhook pr
   expect(screen.queryByText(/current van inventory/i)).not.toBeInTheDocument();
 });
 
-it("loads FX orders with customer identifiers masked and raw submission data excluded", async () => {
+it("shows FX operational and customer fields while excluding raw submission data", async () => {
   apiMocks.requestApi.mockImplementation((url: string) => {
     if (url === "/admin/integration-providers") return Promise.resolve(page([]));
     if (url.startsWith("/admin/fx-orders")) return Promise.resolve(page([{
-      id: 9, order_no: "FX-SECRET-4321", user_id: 31, provider_id: 1, source_currency: "USD", target_currency: "EUR",
-      source_amount: "100", target_amount: "92", fx_rate: "0.92", fee_amount: "1", status: "pending",
-      created_at: "2026-08-24T10:00:00Z", user: { full_name: "Sensitive Customer", email: "customer-secret@example.com", phone: "+66812345678", kyc_status: "approved" },
+      id: 9,
+      order_no: "FX-SECRET-4321",
+      user_id: 31,
+      provider_id: 1,
+      source_currency: "USD",
+      target_currency: "EUR",
+      source_amount: "100",
+      target_amount: "92",
+      fx_rate: "0.92",
+      fee_amount: "1",
+      status: "pending",
+      created_at: "2026-08-24T10:00:00Z",
+      user: {
+        full_name: "Sensitive Customer",
+        email: "customer-secret@example.com",
+        phone: "+66812345678",
+        kyc_status: "approved",
+      },
+      customer_snapshot: {
+        user: {
+          full_name: "Sensitive Customer",
+          email: "customer-secret@example.com",
+          phone: "+66812345678",
+          kyc_status: "approved",
+        },
+        profile: {
+          company_name: "Example Customer Company",
+        },
+        kyc_profile: {
+          legal_name: "Example Customer Legal Name",
+          business_name: "Example Customer Business Name",
+          country_code: "TH",
+          city: "Bangkok",
+        },
+      },
       provider: { id: 1, code: "safe-provider", name: "Safe Provider", status: "active" },
-      raw_data: { api_token: "fx-provider-token", account_number: "9988776655", provider_hash: "provider-hash-secret" },
+      raw_data: {
+        api_token: "fx-provider-token",
+        account_number: "9988776655",
+        provider_hash: "provider-hash-secret",
+      },
     }]));
     return Promise.resolve(page([]));
   });
 
   renderPage(<AdminFxOrders />);
-  expect(await screen.findByText("****4321")).toBeInTheDocument();
+
+  expect(await screen.findByText("FX-SECRET-4321")).toBeInTheDocument();
+  expect(screen.getByText("Sensitive Customer")).toBeInTheDocument();
+  expect(screen.getByText("customer-secret@example.com")).toBeInTheDocument();
   expect(screen.getByText("100 USD")).toBeInTheDocument();
+
   fireEvent.click(screen.getByRole("button", { name: "Detail" }));
+
   expect(screen.getAllByText("Safe Provider").length).toBeGreaterThan(0);
-  for (const secret of ["FX-SECRET-4321", "Sensitive Customer", "customer-secret@example.com", "+66812345678", "fx-provider-token", "9988776655", "provider-hash-secret"]) {
+  expect(screen.getByText("+66812345678")).toBeInTheDocument();
+  expect(screen.getByText("Example Customer Company")).toBeInTheDocument();
+  expect(screen.getByText("Example Customer Legal Name")).toBeInTheDocument();
+  expect(screen.getByText("Example Customer Business Name")).toBeInTheDocument();
+
+  for (const secret of ["fx-provider-token", "9988776655", "provider-hash-secret"]) {
     expect(screen.queryByText(secret)).not.toBeInTheDocument();
   }
 });
