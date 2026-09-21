@@ -226,7 +226,7 @@ const AdminProviders = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.7fr)]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -310,14 +310,14 @@ const AdminProviders = () => {
             </div>
 
             <div className="hidden lg:block">
-              <Table className="min-w-[820px]">
+              <Table className="min-w-[720px] table-fixed 2xl:min-w-0">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Provider</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Capabilities</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[24%]">Provider</TableHead>
+                    <TableHead className="w-[20%]">Code</TableHead>
+                    <TableHead className="w-[14%]">Status</TableHead>
+                    <TableHead className="w-[27%]">Capabilities</TableHead>
+                    <TableHead className="w-[15%] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
