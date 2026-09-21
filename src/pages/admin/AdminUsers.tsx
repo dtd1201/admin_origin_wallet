@@ -177,6 +177,7 @@ const AdminUsers = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [dialogMode, setDialogMode] = useState<"create" | "edit" | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [formState, setFormState] = useState<UserFormState>(emptyUserForm);
@@ -184,9 +185,13 @@ const AdminUsers = () => {
   const [deleteError, setDeleteError] = useState("");
 
   const usersQuery = useQuery({
-    queryKey: ["admin", "users", token],
+    queryKey: ["admin", "users", token, page],
     enabled: !!token,
-    queryFn: async () => requestApi<PaginatedResponse<AdminUser>>(adminEndpointConfig.users, { method: "GET", token }),
+    queryFn: async () =>
+      requestApi<PaginatedResponse<AdminUser>>(
+        `${adminEndpointConfig.users}?page=${page}`,
+        { method: "GET", token },
+      ),
   });
 
   const kycProfilesQuery = useQuery({
@@ -458,7 +463,10 @@ const AdminUsers = () => {
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search name, email, status, or KYC"
                 className="h-11 rounded-2xl border-slate-200 pl-11"
               />
@@ -702,6 +710,40 @@ const AdminUsers = () => {
               </TableBody>
             </Table>
           </div>
+
+          {(usersQuery.data?.last_page ?? 1) > 1 && (
+            <div className="mt-6 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-500">
+                Showing {usersQuery.data?.from ?? 0}-{usersQuery.data?.to ?? 0} of {usersQuery.data?.total ?? 0} users
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500">
+                  Page {usersQuery.data?.current_page ?? page} of {usersQuery.data?.last_page ?? 1}
+                </span>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || usersQuery.isFetching}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  Previous
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= (usersQuery.data?.last_page ?? 1) || usersQuery.isFetching}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
