@@ -96,13 +96,18 @@ it("loads wallet and ledger detail endpoints", async () => {
   await waitFor(() => expect(apiMocks.getAdminLedgerEntry).toHaveBeenCalledWith(9, "admin-token"));
 });
 
-it("masks wallet and internal ledger references", async () => {
+it("shows operational wallet and ledger references in full", async () => {
   renderPage();
-  expect(await screen.findAllByText("****5678")).not.toHaveLength(0);
-  expect(screen.getByText("****9876")).toBeInTheDocument();
-  expect(screen.queryByText("raw-external-wallet-12345678")).not.toBeInTheDocument();
-  expect(screen.queryByText("raw-internal-ledger-reference-9876")).not.toBeInTheDocument();
-  expect(screen.queryByText("raw-source-id-4567")).not.toBeInTheDocument();
+
+  expect(await screen.findAllByText("raw-external-wallet-12345678")).not.toHaveLength(0);
+  expect(screen.getByText("raw-internal-ledger-reference-9876")).toBeInTheDocument();
+
+  expect(screen.queryByText("****5678")).not.toBeInTheDocument();
+  expect(screen.queryByText("****9876")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Inspect entry" }));
+
+  expect(await screen.findByText("raw-source-id-4567")).toBeInTheDocument();
 });
 
 it("shows API errors", async () => {
