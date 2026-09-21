@@ -144,7 +144,7 @@ const AdminComplianceEvents = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.7fr)]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="space-y-5">
             <div>
@@ -181,8 +181,8 @@ const AdminComplianceEvents = () => {
             {eventsQuery.isError && <ErrorPanel message={eventsQuery.error instanceof Error ? eventsQuery.error.message : "Unable to load compliance events."} />}
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
-                <Table className="min-w-[900px]">
-                  <TableHeader><TableRow><TableHead>Received</TableHead><TableHead>Event</TableHead><TableHead>Provider status</TableHead><TableHead>Match</TableHead><TableHead>Review</TableHead><TableHead className="text-right">Detail</TableHead></TableRow></TableHeader>
+                <Table className="min-w-[760px] table-fixed 2xl:min-w-0">
+                  <TableHeader><TableRow><TableHead className="w-[18%]">Received</TableHead><TableHead className="w-[28%]">Event</TableHead><TableHead className="w-[16%]">Provider status</TableHead><TableHead className="w-[12%]">Match</TableHead><TableHead className="w-[12%]">Review</TableHead><TableHead className="w-[14%] text-right">Detail</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {rows.length ? rows.map((event) => (
                       <TableRow key={event.id} className={selectedId === event.id ? "bg-emerald-50/70" : undefined}>
@@ -213,7 +213,7 @@ const AdminComplianceEvents = () => {
             {!detailQuery.isLoading && selectedEvent ? (
               <div className="space-y-5">
                 <div className="rounded-3xl bg-slate-950 p-5 text-white"><div className="text-xs uppercase tracking-[0.18em] text-emerald-300">{selectedEvent.provider?.name || "Nium"}</div><div className="mt-2 text-xl font-semibold">{selectedEvent.event_type || "Compliance event"}</div><div className="mt-3 flex flex-wrap gap-2"><Badge className={statusClassName(selectedEvent.review_status)}>{selectedEvent.review_status}</Badge><Badge className={statusClassName(selectedEvent.match_status)}>{selectedEvent.match_status}</Badge></div></div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                   <Detail label="Event reference" value={displayIdentifier(selectedEvent.event_id)} />
                   <Detail label="Request reference" value={displayIdentifier(selectedEvent.request_id)} />
                   <Detail label="Customer reference" value={displayIdentifier(selectedEvent.customer_reference)} />

@@ -83,7 +83,7 @@ const AdminAuditLogs = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,0.7fr)]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -136,15 +136,15 @@ const AdminAuditLogs = () => {
 
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
-                <Table className="min-w-[960px]">
+                <Table className="min-w-[800px] table-fixed 2xl:min-w-0">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Actor</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Entity</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead className="text-right">Detail</TableHead>
+                      <TableHead className="w-[17%]">Time</TableHead>
+                      <TableHead className="w-[21%]">Actor</TableHead>
+                      <TableHead className="w-[23%]">Action</TableHead>
+                      <TableHead className="w-[15%]">Entity</TableHead>
+                      <TableHead className="w-[16%]">Reference</TableHead>
+                      <TableHead className="w-[8%] text-right">Detail</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -162,7 +162,7 @@ const AdminAuditLogs = () => {
                           </TableCell>
                           <TableCell>
                             <Badge variant="secondary">{row.action}</Badge>
-                            {row.summary && <div className="mt-2 max-w-[260px] truncate text-xs text-slate-500">{row.summary}</div>}
+                            {row.summary && <div className="mt-2 break-words text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">{row.summary}</div>}
                           </TableCell>
                           <TableCell>
                             <div className="font-medium text-slate-900">{row.entity_type}</div>
@@ -245,7 +245,7 @@ const AdminAuditLogs = () => {
                       {selectedLog.entity_type} {String(selectedLog.entity_id || "-")}
                     </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                     {buildSafeAuditSummary(selectedLog.before, selectedLog.after, selectedLog.metadata).map((item, index) => (
                       <AuditSummaryItem key={`${item.label}-${index}`} label={item.label} value={item.value} />
                     ))}
@@ -266,7 +266,7 @@ const AdminAuditLogs = () => {
 };
 
 function AuditSummaryItem({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 break-words text-sm font-semibold text-slate-950">{value}</div></div>;
+  return <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{value}</div></div>;
 }
 
 export default AdminAuditLogs;

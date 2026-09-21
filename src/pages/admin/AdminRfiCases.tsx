@@ -164,7 +164,7 @@ const AdminRfiCases = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.7fr)]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="space-y-5">
             <div>
@@ -196,8 +196,8 @@ const AdminRfiCases = () => {
             {casesQuery.isError ? <ErrorPanel message={casesQuery.error instanceof Error ? casesQuery.error.message : "Unable to load RFI cases."} /> : null}
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
-                <Table className="min-w-[820px]">
-                  <TableHeader><TableRow><TableHead>Case</TableHead><TableHead>Scope</TableHead><TableHead>Status</TableHead><TableHead>Submission</TableHead><TableHead>Updated</TableHead><TableHead className="text-right">Detail</TableHead></TableRow></TableHeader>
+                <Table className="min-w-[720px] table-fixed 2xl:min-w-0">
+                  <TableHeader><TableRow><TableHead className="w-[25%]">Case</TableHead><TableHead className="w-[13%]">Scope</TableHead><TableHead className="w-[14%]">Status</TableHead><TableHead className="w-[17%]">Submission</TableHead><TableHead className="w-[18%]">Updated</TableHead><TableHead className="w-[13%] text-right">Detail</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {rows.length ? rows.map((item) => (
                       <TableRow key={item.id}>
@@ -228,7 +228,7 @@ const AdminRfiCases = () => {
             {!detailQuery.isLoading && detailQuery.data ? (
               <div className="space-y-4">
                 <div className="rounded-3xl bg-slate-950 p-5 text-white"><div className="text-xs uppercase tracking-[0.2em] text-emerald-300">{detailQuery.data.scope === "customer" ? "Corporate RFI" : "Transaction RFI"}</div><div className="mt-2 text-2xl font-semibold">Case #{detailQuery.data.id}</div><div className="mt-3 flex flex-wrap gap-2"><Badge className={statusClassName(detailQuery.data.status)}>{detailQuery.data.status}</Badge><Badge className={statusClassName(detailQuery.data.submission_state)}>{detailQuery.data.submission_state}</Badge>{authoritativeClear ? <Badge className="bg-emerald-400 text-slate-950 hover:bg-emerald-400">CLEAR - backend authoritative</Badge> : null}</div></div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                   <Detail label="ID" value={String(detailQuery.data.id)} />
                   <Detail label="Scope" value={detailQuery.data.scope} />
                   <Detail label="Status" value={detailQuery.data.status} />
