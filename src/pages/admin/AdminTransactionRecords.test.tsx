@@ -71,13 +71,16 @@ it("loads safe transaction detail", async () => {
   expect(screen.getAllByText("CLEAR").length).toBeGreaterThan(0);
 });
 
-it("masks external, internal, and transfer references", async () => {
+it("shows operational transaction references in full", async () => {
   renderPage();
-  expect(await screen.findByText("****9876")).toBeInTheDocument();
-  expect(screen.queryByText("external-sensitive-transaction-9876")).not.toBeInTheDocument();
+
+  expect(await screen.findByText("external-sensitive-transaction-9876")).toBeInTheDocument();
+  expect(screen.queryByText("****9876")).not.toBeInTheDocument();
+
   fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
-  expect(await screen.findByText("****4567")).toBeInTheDocument();
-  expect(screen.queryByText("internal-transfer-reference-4567")).not.toBeInTheDocument();
+
+  expect(await screen.findByText("internal-transfer-reference-4567")).toBeInTheDocument();
+  expect(screen.queryByText("****4567")).not.toBeInTheDocument();
 });
 
 it("does not render nested bank, transfer, or raw provider data", async () => {

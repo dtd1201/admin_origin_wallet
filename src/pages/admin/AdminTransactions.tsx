@@ -24,12 +24,9 @@ const workflowStatusLabels: Record<string, string> = {
   submission_unknown: "Submission unknown",
 };
 
-export const maskTransferIdentifier = (value?: string | number | null) => {
-  if (value === null || value === undefined || value === "") return "-";
-  const text = String(value);
-  const suffix = text.slice(-4);
-  const prefix = text.length > 8 ? text.slice(0, 2) : "";
-  return `${prefix}****${suffix}`;
+export const displayTransferIdentifier = (value?: string | number | null) => {
+  const text = String(value ?? "").trim();
+  return text || "-";
 };
 
 export const transferStatusLabel = (status: string) =>
@@ -229,7 +226,7 @@ const AdminTransactions = () => {
                   <div key={row.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-900">{maskTransferIdentifier(row.transfer_no)}</div>
+                        <div className="font-medium text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
                         <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
                       </div>
                       <Badge className={statusClassName(row.status)}>{transferStatusLabel(row.status)}</Badge>
@@ -272,11 +269,11 @@ const AdminTransactions = () => {
                     rows.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell>
-                          <div className="font-medium text-slate-900">{maskTransferIdentifier(row.transfer_no)}</div>
+                          <div className="font-medium text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
                           <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
                           {(row.external_transfer_id || row.external_payment_id) && (
                             <div className="mt-1 max-w-[240px] truncate text-xs text-slate-400">
-                              {maskTransferIdentifier(row.external_transfer_id || row.external_payment_id)}
+                              {displayTransferIdentifier(row.external_transfer_id || row.external_payment_id)}
                             </div>
                           )}
                         </TableCell>
@@ -401,7 +398,7 @@ const AdminTransactions = () => {
 const TransferReview = ({ transfer }: { transfer: AdminTransfer }) => {
   const beneficiaryName = transfer.beneficiary?.company_name || transfer.beneficiary?.full_name;
   const fields = [
-    ["Transfer ID", maskTransferIdentifier(transfer.transfer_no || transfer.id)],
+    ["Transfer ID", displayTransferIdentifier(transfer.transfer_no || transfer.id)],
     ["Status", transferStatusLabel(transfer.status)],
     ["Source amount", formatAmount(transfer.source_amount, transfer.source_currency)],
     ["Target amount", formatAmount(transfer.target_amount, transfer.target_currency)],
@@ -413,7 +410,7 @@ const TransferReview = ({ transfer }: { transfer: AdminTransfer }) => {
   return <div className="space-y-4">
     <dl className="grid gap-3 sm:grid-cols-2">{fields.map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 text-sm text-slate-900">{value}</dd></div>)}</dl>
     {beneficiaryName && <div className="rounded-2xl border border-slate-200 p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Beneficiary summary</div><div className="mt-2 font-medium text-slate-900">{beneficiaryName}</div><div className="mt-1 text-sm text-slate-600">{[transfer.beneficiary?.bank_name, transfer.beneficiary?.country_code, transfer.beneficiary?.currency, transfer.beneficiary?.status].filter(Boolean).join(" · ")}</div></div>}
-    {(transfer.external_transfer_id || transfer.external_payment_id) && <div className="text-xs text-slate-500">Provider reference: {maskTransferIdentifier(transfer.external_transfer_id || transfer.external_payment_id)}</div>}
+    {(transfer.external_transfer_id || transfer.external_payment_id) && <div className="text-xs text-slate-500">Provider reference: {displayTransferIdentifier(transfer.external_transfer_id || transfer.external_payment_id)}</div>}
   </div>;
 };
 

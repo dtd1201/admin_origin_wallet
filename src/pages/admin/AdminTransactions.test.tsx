@@ -69,13 +69,14 @@ it.each([
   await waitFor(() => expect(apiMocks.requestApi).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method: "POST", body: {} })));
 });
 
-it("masks transfer and provider identifiers", async () => {
+it("shows transfer and provider operational identifiers in full", async () => {
   renderPage();
-  expect(await screen.findAllByText("TR****9876")).not.toHaveLength(0);
-  expect(screen.getByText("EX****4321")).toBeInTheDocument();
-  expect(screen.queryByText("TR-SENSITIVE-9876")).not.toBeInTheDocument();
-  expect(screen.queryByText("EXT-SENSITIVE-4321")).not.toBeInTheDocument();
-  expect(screen.queryByText("PAY-SENSITIVE-6789")).not.toBeInTheDocument();
+
+  expect(await screen.findAllByText("TR-SENSITIVE-9876")).not.toHaveLength(0);
+  expect(screen.getByText("EXT-SENSITIVE-4321")).toBeInTheDocument();
+
+  expect(screen.queryByText("TR****9876")).not.toBeInTheDocument();
+  expect(screen.queryByText("EX****4321")).not.toBeInTheDocument();
 });
 
 it("renders only safe detail fields and excludes raw payload and account data", async () => {
