@@ -38,6 +38,18 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+type ResourcePaginatedResponse<T> = {
+  data: T[];
+  meta: {
+    current_page: number;
+    from: number | null;
+    last_page: number;
+    per_page: number;
+    to: number | null;
+    total: number;
+  };
+};
+
 type IntegrationLinkForm = {
   provider_code: string;
   provider_name: string;
@@ -188,7 +200,7 @@ const AdminUsers = () => {
     queryKey: ["admin", "users", token, page],
     enabled: !!token,
     queryFn: async () =>
-      requestApi<PaginatedResponse<AdminUser>>(
+      requestApi<ResourcePaginatedResponse<AdminUser>>(
         `${adminEndpointConfig.users}?page=${page}`,
         { method: "GET", token },
       ),
@@ -439,12 +451,12 @@ const AdminUsers = () => {
 
   const stats = useMemo(
     () => [
-      { label: "Total users", value: usersQuery.data?.total ?? 0 },
+      { label: "Total users", value: usersQuery.data?.meta.total ?? 0 },
       { label: "Active", value: rows.filter((row) => row.status === "active").length },
       { label: "Pending KYC", value: rows.filter((row) => ["pending", "submitted", "under_review"].includes(getEffectiveKycStatus(row, getEffectiveKycProfile(row, kycProfilesByUserId)))).length },
       { label: "Submitted KYC/KYB", value: reviewableKycProfiles.length },
     ],
-    [kycProfilesByUserId, reviewableKycProfiles.length, rows, usersQuery.data?.total],
+    [kycProfilesByUserId, reviewableKycProfiles.length, rows, usersQuery.data?.meta.total],
   );
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -711,15 +723,15 @@ const AdminUsers = () => {
             </Table>
           </div>
 
-          {(usersQuery.data?.last_page ?? 1) > 1 && (
+          {(usersQuery.data?.meta.last_page ?? 1) > 1 && (
             <div className="mt-6 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-slate-500">
-                Showing {usersQuery.data?.from ?? 0}-{usersQuery.data?.to ?? 0} of {usersQuery.data?.total ?? 0} users
+                Showing {usersQuery.data?.meta.from ?? 0}-{usersQuery.data?.meta.to ?? 0} of {usersQuery.data?.meta.total ?? 0} users
               </div>
 
               <div className="flex items-center gap-3">
                 <span className="text-sm text-slate-500">
-                  Page {usersQuery.data?.current_page ?? page} of {usersQuery.data?.last_page ?? 1}
+                  Page {usersQuery.data?.meta.current_page ?? page} of {usersQuery.data?.meta.last_page ?? 1}
                 </span>
 
                 <Button
@@ -736,7 +748,7 @@ const AdminUsers = () => {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={page >= (usersQuery.data?.last_page ?? 1) || usersQuery.isFetching}
+                  disabled={page >= (usersQuery.data?.meta.last_page ?? 1) || usersQuery.isFetching}
                   onClick={() => setPage((current) => current + 1)}
                 >
                   Next
