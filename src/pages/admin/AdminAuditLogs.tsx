@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { buildSafeAuditSummary, getAdminErrorCategory, maskAdminIdentifier } from "@/lib/adminDataSafety";
+import { buildSafeAuditSummary, getAdminErrorCategory } from "@/lib/adminDataSafety";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -153,7 +153,7 @@ const AdminAuditLogs = () => {
                         <TableRow key={row.id} className={selectedLog?.id === row.id ? "bg-emerald-50/70" : undefined}>
                           <TableCell>
                             <div className="font-medium text-slate-900">{formatDate(row.created_at)}</div>
-                            <div className="text-xs text-slate-500">{maskAdminIdentifier(row.id)}</div>
+                            <div className="text-xs text-slate-500">{String(row.id)}</div>
                           </TableCell>
                           <TableCell>
                             <div className="break-all font-medium text-slate-900">
@@ -166,10 +166,10 @@ const AdminAuditLogs = () => {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium text-slate-900">{row.entity_type}</div>
-                            <div className="text-xs text-slate-500">{maskAdminIdentifier(row.entity_id)}</div>
+                            <div className="text-xs text-slate-500">{String(row.entity_id || "-")}</div>
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm text-slate-700">{maskAdminIdentifier(row.entity_id || row.id)}</div>
+                            <div className="text-sm text-slate-700">{String(row.entity_id || row.id)}</div>
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end">
@@ -242,7 +242,7 @@ const AdminAuditLogs = () => {
                   <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                     <div className="font-semibold text-slate-950">{selectedLog.action}</div>
                     <div className="mt-1 text-sm text-slate-600">
-                      {selectedLog.entity_type} {maskAdminIdentifier(selectedLog.entity_id)}
+                      {selectedLog.entity_type} {String(selectedLog.entity_id || "-")}
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">

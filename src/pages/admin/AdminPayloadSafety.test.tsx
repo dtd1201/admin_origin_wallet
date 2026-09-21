@@ -20,7 +20,7 @@ const renderPage = (component: React.ReactNode) => {
 
 beforeEach(() => vi.clearAllMocks());
 
-it("loads provider operations with masked references and no provider payload", async () => {
+it("loads provider operations with full operational references and no raw provider payload", async () => {
   apiMocks.requestApi.mockImplementation((url: string) => {
     if (url === "/admin/integration-providers") return Promise.resolve(page([{ id: 1, code: "safe-provider", name: "Safe Provider", status: "active" }]));
     if (url.startsWith("/admin/provider-health")) return Promise.resolve(page([]));
@@ -34,16 +34,16 @@ it("loads provider operations with masked references and no provider payload", a
 
   renderPage(<AdminProviderOperations />);
   expect(await screen.findByText("payment.updated")).toBeInTheDocument();
-  expect(screen.getByText("****9876")).toBeInTheDocument();
+  expect(screen.getByText("external-event-9876")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
   expect(screen.getByText("Failure")).toBeInTheDocument();
   expect(screen.getByText("Timeout")).toBeInTheDocument();
-  for (const secret of ["external-event-9876", "provider-secret-token", "raw-provider-token", "123456789"]) {
+  for (const secret of ["provider-secret-token", "raw-provider-token", "123456789"]) {
     expect(screen.queryByText(secret)).not.toBeInTheDocument();
   }
 });
 
-it("presents masked NIUM virtual account assignment evidence from the webhook projection", async () => {
+it("presents full NIUM operational assignment references from the webhook projection", async () => {
   apiMocks.requestApi.mockImplementation((url: string) => {
     if (url === "/admin/integration-providers") return Promise.resolve(page([{ id: 1, code: "nium", name: "NIUM", status: "active" }]));
     if (url.startsWith("/admin/provider-health")) return Promise.resolve(page([]));
@@ -69,12 +69,9 @@ it("presents masked NIUM virtual account assignment evidence from the webhook pr
   renderPage(<AdminProviderOperations />);
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
   expect(screen.getByText("NIUM Virtual Account Assignment Evidence")).toBeInTheDocument();
-  expect(screen.getByText("****9876")).toBeInTheDocument();
-  expect(screen.getByText("****2468")).toBeInTheDocument();
-  expect(screen.getByText("****1357")).toBeInTheDocument();
-  expect(screen.queryByText("payment-id-9876")).not.toBeInTheDocument();
-  expect(screen.queryByText("customer-hash-2468")).not.toBeInTheDocument();
-  expect(screen.queryByText("wallet-hash-1357")).not.toBeInTheDocument();
+  expect(screen.getByText("payment-id-9876")).toBeInTheDocument();
+  expect(screen.getByText("customer-hash-2468")).toBeInTheDocument();
+  expect(screen.getByText("wallet-hash-1357")).toBeInTheDocument();
   expect(screen.queryByText(/current van inventory/i)).not.toBeInTheDocument();
 });
 
@@ -159,8 +156,12 @@ it("loads audit logs and renders only whitelisted safe summary fields", async ()
   renderPage(<AdminAuditLogs />);
   expect(await screen.findByText("provider.webhook.retry")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
-  for (const safeValue of ["Webhook retry", "completed", "202", "Success", "****1357"]) expect(screen.getByText(safeValue)).toBeInTheDocument();
-  for (const secret of ["provider-record-2468", "10.20.30.40", "audit-secret-token", "11223344", "raw-response-secret", "audit-provider-hash"]) {
+  for (const safeValue of ["Webhook retry", "completed", "202", "Success", "provider-ref-1357"]) {
+    expect(screen.getByText(safeValue)).toBeInTheDocument();
+  }
+
+  expect(screen.getAllByText("provider-record-2468").length).toBeGreaterThan(0);
+  for (const secret of ["10.20.30.40", "audit-secret-token", "11223344", "raw-response-secret", "audit-provider-hash"]) {
     expect(screen.queryByText(secret)).not.toBeInTheDocument();
   }
 });

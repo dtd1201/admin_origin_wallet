@@ -52,10 +52,9 @@ const formatDate = (value?: string | null) => {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 };
 
-const maskIdentifier = (value?: string | null) => {
-  if (!value) return "-";
-  if (value.length <= 8) return `${value.slice(0, 2)}...${value.slice(-2)}`;
-  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+const displayIdentifier = (value?: string | null) => {
+  const normalized = String(value || "").trim();
+  return normalized || "-";
 };
 
 const statusClassName = (status: string) => {
@@ -188,7 +187,7 @@ const AdminComplianceEvents = () => {
                     {rows.length ? rows.map((event) => (
                       <TableRow key={event.id} className={selectedId === event.id ? "bg-emerald-50/70" : undefined}>
                         <TableCell>{formatDate(event.received_at)}</TableCell>
-                        <TableCell><div className="font-medium text-slate-900">{event.event_type || "Compliance event"}</div><div className="text-xs text-slate-500">{maskIdentifier(event.event_id)}</div></TableCell>
+                        <TableCell><div className="font-medium text-slate-900">{event.event_type || "Compliance event"}</div><div className="text-xs text-slate-500">{displayIdentifier(event.event_id)}</div></TableCell>
                         <TableCell>{event.compliance_status || "-"}{event.requires_action && <div className="mt-1 text-xs font-medium text-amber-700">requires action</div>}</TableCell>
                         <TableCell><Badge className={statusClassName(event.match_status)}>{event.match_status}</Badge></TableCell>
                         <TableCell><Badge className={statusClassName(event.review_status)}>{event.review_status}</Badge></TableCell>
@@ -207,7 +206,7 @@ const AdminComplianceEvents = () => {
         </Card>
 
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
-          <CardHeader><CardTitle>Event detail</CardTitle><CardDescription>Operational fields only. Identifiers are masked.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Event detail</CardTitle><CardDescription>Operational fields only. References are shown in full for investigation and reconciliation.</CardDescription></CardHeader>
           <CardContent>
             {detailQuery.isLoading && <div className="rounded-3xl border border-dashed border-slate-300 py-16 text-center text-slate-500">Loading event detail...</div>}
             {detailQuery.isError && <ErrorPanel message={detailQuery.error instanceof Error ? detailQuery.error.message : "Unable to load event detail."} />}
@@ -215,10 +214,10 @@ const AdminComplianceEvents = () => {
               <div className="space-y-5">
                 <div className="rounded-3xl bg-slate-950 p-5 text-white"><div className="text-xs uppercase tracking-[0.18em] text-emerald-300">{selectedEvent.provider?.name || "Nium"}</div><div className="mt-2 text-xl font-semibold">{selectedEvent.event_type || "Compliance event"}</div><div className="mt-3 flex flex-wrap gap-2"><Badge className={statusClassName(selectedEvent.review_status)}>{selectedEvent.review_status}</Badge><Badge className={statusClassName(selectedEvent.match_status)}>{selectedEvent.match_status}</Badge></div></div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Detail label="Event reference" value={maskIdentifier(selectedEvent.event_id)} />
-                  <Detail label="Request reference" value={maskIdentifier(selectedEvent.request_id)} />
-                  <Detail label="Customer reference" value={maskIdentifier(selectedEvent.customer_reference)} />
-                  <Detail label="Payment reference" value={maskIdentifier(selectedEvent.reference)} />
+                  <Detail label="Event reference" value={displayIdentifier(selectedEvent.event_id)} />
+                  <Detail label="Request reference" value={displayIdentifier(selectedEvent.request_id)} />
+                  <Detail label="Customer reference" value={displayIdentifier(selectedEvent.customer_reference)} />
+                  <Detail label="Payment reference" value={displayIdentifier(selectedEvent.reference)} />
                   <Detail label="Provider status" value={selectedEvent.compliance_status || "-"} />
                   <Detail label="Processing status" value={selectedEvent.processing_status} />
                   <Detail label="Received" value={formatDate(selectedEvent.received_at)} />

@@ -47,7 +47,7 @@ export const buildSafeAuditSummary = (
     status && { label: "Status", value: status },
     httpStatus && { label: "HTTP status", value: httpStatus },
     success && { label: "Result", value: success === "true" ? "Success" : success === "false" ? "Failure" : success },
-    reference && { label: "Reference", value: maskAdminIdentifier(reference) },
+    reference && { label: "Reference", value: reference },
     errorCategory && { label: "Error category", value: errorCategory },
     timestamp && { label: "Timestamp", value: timestamp },
   ].filter((item): item is SafeSummaryItem => Boolean(item));

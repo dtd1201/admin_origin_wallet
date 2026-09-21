@@ -17,7 +17,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { getProviderDisplayCode, getProviderDisplayName } from "@/lib/providerDisplay";
-import { getAdminErrorCategory, maskAdminIdentifier } from "@/lib/adminDataSafety";
+import { getAdminErrorCategory } from "@/lib/adminDataSafety";
 
 const webhookStatusOptions = [
   { value: "all", label: "All statuses" },
@@ -70,10 +70,6 @@ const safeWebhookPayloadFields = new Set([
   "uniquePaymentId", "paymentId", "payment_id", "customerHashId", "walletHashId",
 ]);
 
-const maskedWebhookFields = new Set([
-  "uniquePaymentId", "paymentId", "payment_id", "customerHashId", "walletHashId",
-]);
-
 const payloadText = (event: AdminProviderWebhookEvent, key: string) => {
   const value = event.payload?.[key];
   return typeof value === "string" ? value.trim() : "";
@@ -89,9 +85,9 @@ const evidenceTitle = (event: AdminProviderWebhookEvent) => {
   return "Provider Webhook Evidence";
 };
 
-const displayWebhookValue = (key: string, value: unknown) => {
+const displayWebhookValue = (_key: string, value: unknown) => {
   if (!["string", "number", "boolean"].includes(typeof value)) return "Redacted structured value";
-  return maskedWebhookFields.has(key) ? maskAdminIdentifier(String(value)) : String(value);
+  return String(value);
 };
 
 const AdminProviderOperations = () => {
@@ -372,7 +368,7 @@ const AdminProviderOperations = () => {
                             <TableRow key={event.id} className={selectedEvent?.id === event.id ? "bg-emerald-50/70" : undefined}>
                               <TableCell>
                                 <div className="font-semibold text-slate-950">{event.event_type}</div>
-                                <div className="text-xs text-slate-500">{maskAdminIdentifier(event.event_id || event.related_reference || event.id)}</div>
+                                <div className="text-xs text-slate-500">{String(event.event_id || event.related_reference || event.id)}</div>
                                 {event.error_message && <div className="mt-2 text-xs text-red-600">Error category: {getAdminErrorCategory(event.error_message)}</div>}
                               </TableCell>
                               <TableCell>{getProviderLabel(event.provider_code, event.provider)}</TableCell>
@@ -437,7 +433,7 @@ const AdminProviderOperations = () => {
               <Webhook className="h-5 w-5 text-emerald-600" />
               Event detail
             </CardTitle>
-            <CardDescription>Redacted operational fields for the selected webhook event.</CardDescription>
+            <CardDescription>Operational fields from the selected webhook event. Raw provider payloads remain excluded.</CardDescription>
           </CardHeader>
           <CardContent>
             {selectedEvent ? (
@@ -456,7 +452,7 @@ const AdminProviderOperations = () => {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <SafeDetail label="Local event ID" value={String(selectedEvent.id)} />
-                  <SafeDetail label="Provider event reference" value={maskAdminIdentifier(selectedEvent.event_id || selectedEvent.related_reference)} />
+                  <SafeDetail label="Provider event reference" value={String(selectedEvent.event_id || selectedEvent.related_reference || "-")} />
                   <SafeDetail label="Event type" value={selectedEvent.event_type} />
                   <SafeDetail label="Processing status" value={selectedEvent.status} />
                   <SafeDetail label="Received" value={formatDate(selectedEvent.received_at)} />

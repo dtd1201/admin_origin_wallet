@@ -80,12 +80,20 @@ it("passes filters to the list API", async () => {
   expect(apiMocks.getAdminComplianceEvents).toHaveBeenLastCalledWith(expect.stringContaining("review_status=pending"), "admin-token");
 });
 
-it("loads detail without rendering raw identifiers", async () => {
+it("loads detail with full operational references", async () => {
   renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: /inspect/i }));
+
+  expect(await screen.findByText("event-sensitive-12345678")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: /inspect/i }));
+
   await waitFor(() => expect(apiMocks.getAdminComplianceEvent).toHaveBeenCalledWith(7, "admin-token"));
+
   expect(await screen.findByText("transaction")).toBeInTheDocument();
-  expect(screen.queryByText("event-sensitive-12345678")).not.toBeInTheDocument();
+  expect(screen.getAllByText("event-sensitive-12345678").length).toBeGreaterThan(0);
+  expect(screen.getByText("request-sensitive-12345678")).toBeInTheDocument();
+  expect(screen.getByText("customer-sensitive-12345678")).toBeInTheDocument();
+  expect(screen.getByText("payment-sensitive-12345678")).toBeInTheDocument();
 });
 
 it("resolves an event with a required note", async () => {
