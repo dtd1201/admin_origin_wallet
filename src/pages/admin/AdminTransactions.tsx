@@ -196,7 +196,7 @@ const AdminTransactions = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.65fr)]">
         <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -226,7 +226,7 @@ const AdminTransactions = () => {
                   <div key={row.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
+                        <div className="break-all font-medium leading-5 text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
                         <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
                       </div>
                       <Badge className={statusClassName(row.status)}>{transferStatusLabel(row.status)}</Badge>
@@ -254,14 +254,14 @@ const AdminTransactions = () => {
             </div>
 
             <div className="hidden overflow-x-auto lg:block">
-              <Table className="min-w-[980px]">
+              <Table className="min-w-[720px] table-fixed 2xl:min-w-0">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>User / Provider</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead className="w-[29%]">Reference</TableHead>
+                    <TableHead className="w-[26%]">User / Provider</TableHead>
+                    <TableHead className="w-[18%]">Amount</TableHead>
+                    <TableHead className="w-[17%]">Status</TableHead>
+                    <TableHead className="w-[10%] text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -269,10 +269,10 @@ const AdminTransactions = () => {
                     rows.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell>
-                          <div className="font-medium text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
+                          <div className="break-all font-medium leading-5 text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
                           <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
                           {(row.external_transfer_id || row.external_payment_id) && (
-                            <div className="mt-1 max-w-[240px] truncate text-xs text-slate-400">
+                            <div className="mt-1 break-all text-xs leading-5 text-slate-400 [overflow-wrap:anywhere]">
                               {displayTransferIdentifier(row.external_transfer_id || row.external_payment_id)}
                             </div>
                           )}
@@ -291,7 +291,7 @@ const AdminTransactions = () => {
                         </TableCell>
                         <TableCell>
                           <Badge className={statusClassName(row.status)}>{transferStatusLabel(row.status)}</Badge>
-                          {row.failure_reason && <div className="mt-2 max-w-[260px] truncate text-xs text-red-600">{row.failure_reason}</div>}
+                          {row.failure_reason && <div className="mt-2 break-words text-xs leading-5 text-red-600 [overflow-wrap:anywhere]">{row.failure_reason}</div>}
                         </TableCell>
                         <TableCell>
                           <TransferActions

@@ -612,14 +612,14 @@ const AdminUsers = () => {
           </div>
 
           <div className="hidden lg:block">
-            <Table className="min-w-[960px]">
+            <Table className="min-w-[760px] table-fixed xl:min-w-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Profile</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[27%]">User</TableHead>
+                  <TableHead className="w-[25%]">Contact</TableHead>
+                  <TableHead className="w-[18%]">Profile</TableHead>
+                  <TableHead className="w-[14%]">Status</TableHead>
+                  <TableHead className="w-[16%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

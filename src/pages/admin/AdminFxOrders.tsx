@@ -317,7 +317,7 @@ const AdminFxOrders = () => {
 
   return (
     <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.75fr)_minmax(360px,0.7fr)]">
         <div className="space-y-6">
           <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -381,16 +381,16 @@ const AdminFxOrders = () => {
 
               <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
                 <div className="overflow-x-auto">
-                  <Table className="min-w-[960px]">
+                  <Table className="min-w-[800px] table-fixed 2xl:min-w-0">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Order</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Rate / Fee</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
+                        <TableHead className="w-[16%]">Order</TableHead>
+                        <TableHead className="w-[24%]">Customer</TableHead>
+                        <TableHead className="w-[14%]">Provider</TableHead>
+                        <TableHead className="w-[16%]">Amount</TableHead>
+                        <TableHead className="w-[14%]">Rate / Fee</TableHead>
+                        <TableHead className="w-[8%]">Status</TableHead>
+                        <TableHead className="w-[8%] text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -402,12 +402,12 @@ const AdminFxOrders = () => {
                           return (
                             <TableRow key={order.id} className={isSelected ? "bg-emerald-50/70" : undefined}>
                               <TableCell>
-                                <div className="font-semibold text-slate-950">{order.order_no || "-"}</div>
+                                <div className="break-all font-semibold leading-5 text-slate-950">{order.order_no || "-"}</div>
                                 <div className="text-xs text-slate-500">{formatDate(order.created_at)}</div>
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium text-slate-900">{getCustomerName(order)}</div>
-                                <div className="text-xs text-slate-500">{getCustomerEmail(order)}</div>
+                                <div className="break-words font-medium leading-5 text-slate-900">{getCustomerName(order)}</div>
+                                <div className="break-all text-xs leading-5 text-slate-500">{getCustomerEmail(order)}</div>
                               </TableCell>
                               <TableCell>
                                 <div className="font-medium text-slate-900">{getProviderDisplayName(order.provider)}</div>
@@ -505,7 +505,7 @@ const AdminFxOrders = () => {
                     </div>
                     <Badge className={statusClassName(selectedOrder.status)}>{selectedOrder.status}</Badge>
                   </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                     <DetailLine label="Customer" value={getCustomerName(selectedOrder)} />
                     <DetailLine label="Email" value={getCustomerEmail(selectedOrder)} />
                     <DetailLine label="Phone" value={selectedOrder.customer_snapshot?.user?.phone || selectedOrder.user?.phone || "-"} />
@@ -513,7 +513,7 @@ const AdminFxOrders = () => {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                   <DetailLine label="Infrastructure" value={getProviderDisplayName(selectedOrder.provider)} />
                   <DetailLine label="Send" value={formatAmount(selectedOrder.source_amount, selectedOrder.source_currency)} />
                   <DetailLine label="Receive" value={formatAmount(selectedOrder.target_amount, selectedOrder.target_currency)} />
@@ -524,7 +524,7 @@ const AdminFxOrders = () => {
 
                 <div className="rounded-3xl border border-slate-200 bg-white p-4">
                   <div className="font-semibold text-slate-950">Profile snapshot</div>
-                  <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                  <div className="mt-3 grid gap-3 text-sm md:grid-cols-2 2xl:grid-cols-1">
                     <DetailLine label="User type" value={getSnapshotValue(selectedProfile, "user_type")} />
                     <DetailLine label="Company" value={getSnapshotValue(selectedProfile, "company_name")} />
                     <DetailLine label="Legal name" value={getSnapshotValue(selectedKycProfile, "legal_name")} />
