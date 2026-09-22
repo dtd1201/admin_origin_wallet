@@ -182,15 +182,15 @@ const AdminComplianceEvents = () => {
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
                 <Table className="min-w-[760px] table-fixed 2xl:min-w-0">
-                  <TableHeader><TableRow><TableHead className="w-[18%]">Received</TableHead><TableHead className="w-[28%]">Event</TableHead><TableHead className="w-[16%]">Provider status</TableHead><TableHead className="w-[12%]">Match</TableHead><TableHead className="w-[12%]">Review</TableHead><TableHead className="w-[14%] text-right">Detail</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead className="w-[16%]">Received</TableHead><TableHead className="w-[29%]">Event</TableHead><TableHead className="w-[13%]">Provider status</TableHead><TableHead className="w-[18%]">Match</TableHead><TableHead className="w-[10%]">Review</TableHead><TableHead className="w-[14%] text-right">Detail</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {rows.length ? rows.map((event) => (
                       <TableRow key={event.id} className={selectedId === event.id ? "bg-emerald-50/70" : undefined}>
                         <TableCell>{formatDate(event.received_at)}</TableCell>
                         <TableCell><div className="font-medium text-slate-900">{event.event_type || "Compliance event"}</div><div className="text-xs text-slate-500">{displayIdentifier(event.event_id)}</div></TableCell>
                         <TableCell>{event.compliance_status || "-"}{event.requires_action && <div className="mt-1 text-xs font-medium text-amber-700">requires action</div>}</TableCell>
-                        <TableCell><Badge className={statusClassName(event.match_status)}>{event.match_status}</Badge></TableCell>
-                        <TableCell><Badge className={statusClassName(event.review_status)}>{event.review_status}</Badge></TableCell>
+                        <TableCell><Badge className={`${statusClassName(event.match_status)} max-w-full whitespace-normal text-center leading-4 [overflow-wrap:anywhere]`}>{event.match_status}</Badge></TableCell>
+                        <TableCell><Badge className={`${statusClassName(event.review_status)} max-w-full whitespace-normal text-center leading-4 [overflow-wrap:anywhere]`}>{event.review_status}</Badge></TableCell>
                         <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setSelectedId(event.id)}><Eye className="h-4 w-4" />Inspect</Button></TableCell>
                       </TableRow>
                     )) : <TableRow><TableCell colSpan={6} className="h-36 text-center text-slate-500">{eventsQuery.isLoading ? "Loading compliance events..." : "No compliance events found."}</TableCell></TableRow>}

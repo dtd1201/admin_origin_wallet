@@ -197,14 +197,14 @@ const AdminRfiCases = () => {
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
                 <Table className="min-w-[720px] table-fixed 2xl:min-w-0">
-                  <TableHeader><TableRow><TableHead className="w-[25%]">Case</TableHead><TableHead className="w-[13%]">Scope</TableHead><TableHead className="w-[14%]">Status</TableHead><TableHead className="w-[17%]">Submission</TableHead><TableHead className="w-[18%]">Updated</TableHead><TableHead className="w-[13%] text-right">Detail</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead className="w-[13%]">Case</TableHead><TableHead className="w-[12%]">Scope</TableHead><TableHead className="w-[23%]">Status</TableHead><TableHead className="w-[18%]">Submission</TableHead><TableHead className="w-[21%]">Updated</TableHead><TableHead className="w-[13%] text-right">Detail</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {rows.length ? rows.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium text-slate-900">#{item.id}</TableCell>
                         <TableCell>{item.scope}</TableCell>
-                        <TableCell><Badge className={statusClassName(item.status)}>{item.status}</Badge></TableCell>
-                        <TableCell><Badge className={statusClassName(item.submission_state)}>{item.submission_state}</Badge></TableCell>
+                        <TableCell><Badge className={`${statusClassName(item.status)} max-w-full whitespace-normal text-center leading-4 [overflow-wrap:anywhere]`}>{item.status}</Badge></TableCell>
+                        <TableCell><Badge className={`${statusClassName(item.submission_state)} max-w-full whitespace-normal text-center leading-4 [overflow-wrap:anywhere]`}>{item.submission_state}</Badge></TableCell>
                         <TableCell>{formatDate(item.updated_at)}</TableCell>
                         <TableCell className="text-right"><Button type="button" size="sm" variant="outline" onClick={() => { setSelectedId(item.id); setAnswers([{ questionId: "", answer: "" }]); setActionError(""); }}><Eye className="h-4 w-4" />Inspect</Button></TableCell>
                       </TableRow>
