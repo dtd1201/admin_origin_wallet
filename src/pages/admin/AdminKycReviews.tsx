@@ -641,17 +641,17 @@ const AdminKycReviews = () => {
           <div className="space-y-5">
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
               <div className="overflow-x-auto">
-                <Table className="min-w-[1040px]">
+                <Table className="min-w-[840px] table-fixed xl:min-w-0">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Requirements</TableHead>
-                      <TableHead>Documents</TableHead>
-                      <TableHead>Submitted</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableHead className="w-[24%]">Customer</TableHead>
+                      <TableHead className="w-[9%]">Type</TableHead>
+                      <TableHead className="w-[9%]">Country</TableHead>
+                      <TableHead className="w-[11%]">Status</TableHead>
+                      <TableHead className="w-[13%]">Requirements</TableHead>
+                      <TableHead className="w-[10%]">Documents</TableHead>
+                      <TableHead className="w-[14%]">Submitted</TableHead>
+                      <TableHead className="w-[10%] text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -662,8 +662,8 @@ const AdminKycReviews = () => {
                         return (
                           <TableRow key={profile.id}>
                             <TableCell>
-                              <div className="font-medium text-slate-900">{getProfileName(profile)}</div>
-                              <div className="text-xs text-slate-500">
+                              <div className="break-words font-medium leading-5 text-slate-900">{getProfileName(profile)}</div>
+                              <div className="break-all text-xs leading-5 text-slate-500">
                                 {profile.user?.email ?? `User #${profile.user_id}`}
                               </div>
                             </TableCell>
@@ -678,7 +678,7 @@ const AdminKycReviews = () => {
                               </Badge>
                             </TableCell>
                             <TableCell>{profile.documents?.length ?? 0}</TableCell>
-                            <TableCell>{formatDate(profile.submitted_at)}</TableCell>
+                            <TableCell className="text-xs leading-5">{formatDate(profile.submitted_at)}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 size="sm"
