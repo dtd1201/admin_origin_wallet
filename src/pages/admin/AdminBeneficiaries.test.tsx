@@ -32,12 +32,18 @@ it("renders beneficiary operational fields and read-only payout status", async (
   expect(screen.getAllByText("Jane Doe").length).toBeGreaterThan(0);
 });
 
-it("does not disclose payment coordinates, provider identifiers, or payloads", async () => {
+it("shows beneficiary banking details while keeping provider identifiers and payloads hidden", async () => {
   apiMocks.getAdminBeneficiary.mockResolvedValue({ ...beneficiary, account_number: "account-secret", iban: "iban-secret", swift_bic: "swift-secret", routing_number: "routing-secret", raw_data: { token: "provider-token" } });
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
   await screen.findAllByText("Jane Doe");
-  for (const secret of ["provider-beneficiary-secret", "account-secret", "iban-secret", "swift-secret", "routing-secret", "provider-token"]) expect(screen.queryByText(secret)).not.toBeInTheDocument();
+  for (const visible of ["account-secret", "iban-secret", "swift-secret"]) {
+    expect(screen.getByText(visible)).toBeInTheDocument();
+  }
+
+  for (const hidden of ["provider-beneficiary-secret", "routing-secret", "provider-token"]) {
+    expect(screen.queryByText(hidden)).not.toBeInTheDocument();
+  }
 });
 
 it("renders unknown mapping and an empty state safely", async () => {

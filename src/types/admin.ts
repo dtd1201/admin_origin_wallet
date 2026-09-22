@@ -36,7 +36,7 @@ export interface AdminBankAccount {
   user_id: number;
   provider_id?: number | null;
   currency: string;
-  status?: string | null;
+  status: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -48,7 +48,14 @@ export interface AdminBeneficiary {
   external_beneficiary_id?: string | null;
   full_name?: string | null;
   company_name?: string | null;
+  country_code?: string | null;
   currency: string;
+  bank_name?: string | null;
+  bank_code?: string | null;
+  branch_code?: string | null;
+  account_number?: string | null;
+  iban?: string | null;
+  swift_bic?: string | null;
   status?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -295,6 +302,23 @@ export interface AdminKycRelatedPerson {
   updated_at?: string | null;
 }
 
+export interface AdminKycCompanyDirector {
+  id: number;
+  legal_name: string;
+  date_of_birth?: string | null;
+  nationality_country_code?: string | null;
+  residence_country_code?: string | null;
+  position?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code?: string | null;
+  status?: string | null;
+  documents?: AdminKycDocument[];
+}
+
 export interface AdminKycRequirement {
   id: number;
   key: string;
@@ -376,6 +400,7 @@ export interface AdminKycProfile {
   metadata?: Record<string, unknown> | null;
   documents?: AdminKycDocument[];
   related_persons?: AdminKycRelatedPerson[];
+  company_directors?: AdminKycCompanyDirector[];
   requirements?: AdminKycRequirement[];
   aml_screenings?: AdminAmlScreening[];
   created_at?: string | null;
