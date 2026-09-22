@@ -154,6 +154,45 @@ it("loads selected customer data from the detail endpoint", async () => {
   expect((await screen.findAllByText("Detail Business Name")).length).toBeGreaterThan(0);
 });
 
+it("displays company directors separately from related persons", async () => {
+  const profileWithDirector: AdminKycProfile = {
+    ...detailProfile,
+    related_persons: [],
+    company_directors: [{
+      id: 71,
+      legal_name: "Director Example",
+      position: "Director",
+      date_of_birth: "1985-04-12",
+      nationality_country_code: "HK",
+      residence_country_code: "SG",
+      country_code: "HK",
+      address_line1: "18 Director Road",
+      city: "Hong Kong",
+      status: "submitted",
+      documents: [{
+        id: 72,
+        type: "passport_front",
+        status: "submitted",
+        file_url: "/api/kyc-company-director-documents/72",
+        original_name: "director-passport.pdf",
+      }],
+    }],
+  };
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: profileWithDirector,
+    kyc_submission: profileWithDirector,
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText("Company directors")).toBeVisible();
+  expect(screen.getByText("Director Example")).toBeVisible();
+  expect(screen.getByText("director-passport.pdf")).toBeVisible();
+  expect(screen.getByText("No related persons submitted.")).toBeVisible();
+});
+
 it("offers the backend draft and expired status filters", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("combobox"));

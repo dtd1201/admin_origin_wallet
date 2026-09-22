@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import type {
   AdminAmlScreening,
+  AdminKycCompanyDirector,
   AdminKycDocument,
   AdminKycProfile,
   AdminKycRelatedPerson,
@@ -92,6 +93,15 @@ const formatPercent = (value?: string | number | null) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? `${numeric}%` : String(value);
 };
+
+const formatDirectorAddress = (director: AdminKycCompanyDirector) =>
+  [
+    director.address_line1,
+    director.address_line2,
+    director.city,
+    director.state,
+    director.postal_code,
+  ].filter(Boolean).join(", ") || "-";
 
 const formatMetadataValue = (value: unknown): string => {
   if (value === null || value === undefined || value === "") return "-";
@@ -1033,6 +1043,65 @@ const AdminKycReviews = () => {
                           ))
                         ) : (
                           <div className="text-sm text-slate-500">No related persons submitted.</div>
+                        )}
+                      </div>
+                    </Section>
+
+                    <Section title="Company directors">
+                      <div className="space-y-2">
+                        {selectedProfile.company_directors?.length ? (
+                          selectedProfile.company_directors.map((director) => (
+                            <div key={director.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="font-medium text-slate-900">{director.legal_name}</div>
+                                <Badge className={statusClassName(director.status || "submitted")}>
+                                  {director.status || "-"}
+                                </Badge>
+                              </div>
+                              <div className="mt-2 grid gap-2 text-slate-600 md:grid-cols-2">
+                                <DetailItem label="Position" value={director.position || "-"} />
+                                <DetailItem label="DOB" value={formatDateOnly(director.date_of_birth)} />
+                                <DetailItem label="Nationality" value={director.nationality_country_code || "-"} />
+                                <DetailItem label="Residence country" value={director.residence_country_code || "-"} />
+                                <DetailItem label="Country" value={director.country_code || "-"} />
+                                <DetailItem label="Address" value={formatDirectorAddress(director)} />
+                              </div>
+                              {director.documents?.length ? (
+                                <div className="mt-3 space-y-2">
+                                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                    Documents
+                                  </div>
+                                  {director.documents.map((document) => (
+                                    <div
+                                      key={document.id}
+                                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2"
+                                    >
+                                      <div>
+                                        <div className="font-medium text-slate-900">{document.type}</div>
+                                        <div className="break-all text-xs text-slate-500">
+                                          {document.original_name || "Stored company-director evidence"}
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge className={statusClassName(document.status)}>{document.status}</Badge>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="rounded-full"
+                                          onClick={() => void openDocument(document)}
+                                        >
+                                          Open
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-sm text-slate-500">No company directors submitted.</div>
                         )}
                       </div>
                     </Section>
