@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Clock3, Eye, ReceiptText, RefreshCcw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
+import { adminEndpointConfig, requestApi } from "@/lib/api";
 import type { AdminTransfer } from "@/types/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,6 +74,18 @@ const statusClassName = (status: string) => {
   return "bg-slate-100 text-slate-700 hover:bg-slate-100";
 };
 
+type TransferListResponse = {
+  data: AdminTransfer[];
+  current_page?: number;
+  last_page?: number;
+  total?: number;
+  meta?: {
+    current_page?: number;
+    last_page?: number;
+    total?: number;
+  };
+};
+
 const canApprove = (transfer: AdminTransfer) =>
   ["draft", "approval_required"].includes(transfer.status.toLowerCase()) &&
   !transfer.approvals?.some((approval) => approval.action === "approved");
@@ -97,7 +109,7 @@ const AdminTransactions = () => {
     queryKey: ["admin", "transfers", page, token],
     enabled: !!token,
     queryFn: async () =>
-      requestApi<PaginatedResponse<AdminTransfer>>(`${adminEndpointConfig.transfers}?page=${page}`, { method: "GET", token }),
+      requestApi<TransferListResponse>(`${adminEndpointConfig.transfers}?page=${page}`, { method: "GET", token }),
   });
 
   const transferDetailQuery = useQuery({
@@ -181,9 +193,15 @@ const AdminTransactions = () => {
   });
 
   const rows = transfersQuery.data?.data ?? [];
+  const responseMeta = transfersQuery.data?.meta;
   const mutationPending = approveMutation.isPending || rejectMutation.isPending || syncMutation.isPending;
-  const currentPage = transfersQuery.data?.current_page ?? page;
-  const lastPage = transfersQuery.data?.last_page ?? 1;
+  const currentPage = responseMeta?.current_page ?? transfersQuery.data?.current_page ?? page;
+  const lastPage = responseMeta?.last_page ?? transfersQuery.data?.last_page ?? 1;
+  const totalTransfers = responseMeta?.total ?? transfersQuery.data?.total ?? rows.length;
+  const awaitingApprovalOnPage = rows.filter(canApprove).length;
+  const inProviderFlowOnPage = rows.filter((row) =>
+    ["submitted", "pending"].includes(row.status.toLowerCase()),
+  ).length;
   const selectedTransfer = transferDetailQuery.data;
 
   const confirmAction = () => {
@@ -335,17 +353,17 @@ const AdminTransactions = () => {
                 {
                   icon: ArrowRightLeft,
                   title: "Total transfers",
-                  description: String(transfersQuery.data?.total ?? 0),
+                  description: String(totalTransfers),
                 },
                 {
                   icon: Clock3,
-                  title: "Need approval on page",
-                  description: String(rows.filter((row) => row.status === "approval_required").length),
+                  title: "Awaiting admin approval on page",
+                  description: String(awaitingApprovalOnPage),
                 },
                 {
                   icon: ReceiptText,
                   title: "In provider flow on page",
-                  description: String(rows.filter((row) => ["submitted", "pending"].includes(row.status)).length),
+                  description: String(inProviderFlowOnPage),
                 },
               ].map((item) => (
                 <div key={item.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
