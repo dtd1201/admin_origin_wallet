@@ -271,47 +271,75 @@ const AdminTransactions = () => {
               )}
             </div>
 
-            <div className="hidden overflow-x-auto lg:block">
-              <Table className="min-w-[720px] table-fixed 2xl:min-w-0">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[29%]">Reference</TableHead>
-                    <TableHead className="w-[26%]">User / Provider</TableHead>
-                    <TableHead className="w-[18%]">Amount</TableHead>
-                    <TableHead className="w-[17%]">Status</TableHead>
-                    <TableHead className="w-[10%] text-right">Action</TableHead>
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white lg:block">
+              <Table className="min-w-[760px] table-fixed 2xl:min-w-0">
+                <TableHeader className="bg-slate-50/90">
+                  <TableRow className="border-slate-200 hover:bg-slate-50/90">
+                    <TableHead className="w-[29%] py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Reference
+                    </TableHead>
+                    <TableHead className="w-[25%] py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      User / Provider
+                    </TableHead>
+                    <TableHead className="w-[17%] py-3 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Amount
+                    </TableHead>
+                    <TableHead className="w-[15%] py-3 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Status
+                    </TableHead>
+                    <TableHead className="w-[14%] py-3 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Action
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length > 0 ? (
                     rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <div className="break-all font-medium leading-5 text-slate-900">{displayTransferIdentifier(row.transfer_no)}</div>
-                          <div className="text-xs text-slate-500">{formatDate(row.created_at || row.submitted_at)}</div>
+                      <TableRow key={row.id} className="border-slate-100 transition-colors hover:bg-slate-50/70">
+                        <TableCell className="py-4 align-top">
+                          <div className="break-all text-sm font-semibold leading-5 text-slate-950">
+                            {displayTransferIdentifier(row.transfer_no)}
+                          </div>
+                          <div className="mt-1 text-[11px] leading-4 text-slate-500">
+                            {formatDate(row.created_at || row.submitted_at)}
+                          </div>
                           {(row.external_transfer_id || row.external_payment_id) && (
-                            <div className="mt-1 break-all text-xs leading-5 text-slate-400 [overflow-wrap:anywhere]">
-                              {displayTransferIdentifier(row.external_transfer_id || row.external_payment_id)}
+                            <div className="mt-2 inline-flex max-w-full rounded-md bg-slate-100 px-2 py-1 font-mono text-[10px] leading-4 text-slate-500">
+                              <span className="break-all [overflow-wrap:anywhere]">
+                                {displayTransferIdentifier(row.external_transfer_id || row.external_payment_id)}
+                              </span>
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <div className="text-slate-900">{row.user?.email || `User #${row.user_id}`}</div>
-                          <div className="text-xs text-slate-500">Origin Wallet</div>
+                        <TableCell className="py-4 align-top">
+                          <div className="break-all text-sm font-medium leading-5 text-slate-900">
+                            {row.user?.email || `User #${row.user_id}`}
+                          </div>
+                          <div className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">
+                            Origin Wallet
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-slate-900">
+                        <TableCell className="py-4 text-right align-top">
+                          <div className="whitespace-nowrap text-sm font-semibold tabular-nums text-slate-950">
                             {formatAmount(row.source_amount, row.source_currency)}
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-slate-500">
                             {formatAmount(row.target_amount, row.target_currency)}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge className={statusClassName(row.status)}>{transferStatusLabel(row.status)}</Badge>
-                          {row.failure_reason && <div className="mt-2 break-words text-xs leading-5 text-red-600 [overflow-wrap:anywhere]">{row.failure_reason}</div>}
+                        <TableCell className="py-4 text-center align-top">
+                          <Badge
+                            className={`${statusClassName(row.status)} justify-center whitespace-nowrap px-2.5 py-1 text-[11px] font-medium`}
+                          >
+                            {transferStatusLabel(row.status)}
+                          </Badge>
+                          {row.failure_reason && (
+                            <div className="mt-2 break-words text-left text-[11px] leading-4 text-red-600 [overflow-wrap:anywhere]">
+                              {row.failure_reason}
+                            </div>
+                          )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-4 align-top">
                           <TransferActions
                             transfer={row}
                             disabled={mutationPending}
@@ -445,11 +473,26 @@ const TransferActions = ({
   onSync: () => void;
   transfer: AdminTransfer;
 }) => (
-  <div className={compact ? "flex justify-end gap-2" : "mt-4 flex flex-wrap gap-2"}>
-    <Button size="sm" variant="outline" disabled={disabled} onClick={onReview}><Eye className="h-4 w-4" />Review</Button>
+  <div className={compact ? "flex flex-col items-end gap-1.5" : "mt-4 flex flex-wrap gap-2"}>
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={disabled}
+      onClick={onReview}
+      className={compact ? "h-8 min-w-[82px] justify-center rounded-lg px-2 text-xs" : undefined}
+    >
+      <Eye className="h-3.5 w-3.5" />
+      Review
+    </Button>
     {canSync(transfer) && (
-      <Button size="sm" variant="outline" disabled={disabled} onClick={onSync}>
-        <RefreshCcw className="h-4 w-4" />
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={onSync}
+        className={compact ? "h-8 min-w-[82px] justify-center rounded-lg px-2 text-xs" : undefined}
+      >
+        <RefreshCcw className="h-3.5 w-3.5" />
         Sync
       </Button>
     )}
