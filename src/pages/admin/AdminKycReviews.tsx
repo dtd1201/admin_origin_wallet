@@ -661,8 +661,9 @@ const AdminKycReviews = () => {
                       <TableHead className="w-[24%]">Customer</TableHead>
                       <TableHead className="w-[9%]">Type</TableHead>
                       <TableHead className="w-[9%]">Country</TableHead>
-                      <TableHead className="w-[11%]">Status</TableHead>
-                      <TableHead className="w-[13%]">Requirements</TableHead>
+                      <TableHead className="w-[10%]">Status</TableHead>
+                      <TableHead className="w-[10%]">Nium Status</TableHead>
+                      <TableHead className="w-[11%]">Requirements</TableHead>
                       <TableHead className="w-[10%]">Documents</TableHead>
                       <TableHead className="w-[14%]">Submitted</TableHead>
                       <TableHead className="w-[10%] text-right">Action</TableHead>
@@ -688,8 +689,8 @@ const AdminKycReviews = () => {
                                 {displayKycStatus(profile.status)}
                               </Badge>
                             </TableCell>
-                            <TableCell>
-                              <Badge className={statusClassName(profile.provider_status || "pending")}>
+                            <TableCell className="w-[10%]">
+                              <Badge className={`text-xs ${statusClassName(profile.provider_status || "pending")}`}>
                                 {profile.provider_status || "-"}
                               </Badge>
                             </TableCell>
