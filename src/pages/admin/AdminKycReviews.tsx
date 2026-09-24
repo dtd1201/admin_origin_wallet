@@ -56,9 +56,7 @@ const statusOptions = [
 ] as const;
 
 const displayKycStatus = (status?: string | null) => {
-  return String(status ?? "").toLowerCase() === "verified"
-    ? "approved"
-    : status || "-";
+  return status || "-";
 };
 
 const statusClassName = (status: string) => {
