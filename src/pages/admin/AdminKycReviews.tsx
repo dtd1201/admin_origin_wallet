@@ -55,6 +55,12 @@ const statusOptions = [
   { value: "expired", label: "Expired" },
 ] as const;
 
+const displayKycStatus = (status?: string | null) => {
+  return String(status ?? "").toLowerCase() === "verified"
+    ? "approved"
+    : status || "-";
+};
+
 const statusClassName = (status: string) => {
   const normalized = status.toLowerCase();
 
@@ -680,7 +686,9 @@ const AdminKycReviews = () => {
                             <TableCell className="capitalize">{profile.applicant_type}</TableCell>
                             <TableCell>{profile.country_code || profile.registered_country_code || "-"}</TableCell>
                             <TableCell>
-                              <Badge className={statusClassName(profile.status)}>{profile.status}</Badge>
+                              <Badge className={statusClassName(displayKycStatus(profile.status))}>
+                                {displayKycStatus(profile.status)}
+                              </Badge>
                             </TableCell>
                             <TableCell>
                               <Badge variant={requiredRequirements > 0 ? "secondary" : "outline"}>
@@ -796,7 +804,9 @@ const AdminKycReviews = () => {
                             {selectedProfile.user?.email ?? `User #${selectedProfile.user_id}`}
                           </div>
                         </div>
-                        <Badge className={statusClassName(selectedProfile.status)}>{selectedProfile.status}</Badge>
+                        <Badge className={statusClassName(displayKycStatus(selectedProfile.status))}>
+                          {displayKycStatus(selectedProfile.status)}
+                        </Badge>
                       </div>
                       <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
                         <DetailItem label="User ID" value={`#${selectedProfile.user_id}`} />
