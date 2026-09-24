@@ -689,6 +689,11 @@ const AdminKycReviews = () => {
                               </Badge>
                             </TableCell>
                             <TableCell>
+                              <Badge className={statusClassName(profile.provider_status || "pending")}>
+                                {profile.provider_status || "-"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
                               <Badge variant={requiredRequirements > 0 ? "secondary" : "outline"}>
                                 {requiredRequirements} required
                               </Badge>
