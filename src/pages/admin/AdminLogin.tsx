@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 const AdminLogin = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, verifyLogin, authError, clearAuthError, user } = useAuth();
+  const { login, resendLogin, verifyLogin, authError, clearAuthError, user } = useAuth();
   const [step, setStep] = useState<"credentials" | "verify">("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,6 +20,8 @@ const AdminLogin = () => {
   const [error, setError] = useState("");
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [isVerifyLoading, setIsVerifyLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(120);
+  const [isResendLoading, setIsResendLoading] = useState(false);
 
   useEffect(() => {
     clearAuthError();
@@ -27,6 +29,18 @@ const AdminLogin = () => {
       navigate("/admin", { replace: true });
     }
   }, [clearAuthError, navigate, user]);
+
+  useEffect(() => {
+    if (step !== "verify" || resendCooldown <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [step, resendCooldown]);
 
   const nextPath = typeof location.state?.from === "string" ? location.state.from : "/admin";
 
@@ -40,11 +54,41 @@ const AdminLogin = () => {
       const challenge = await login(email.trim(), password);
       setEmail(challenge.email || email.trim());
       setNotice(challenge.message || "Verification code sent to your email.");
+      setResendCooldown(120);
       setStep("verify");
     } catch (authFailure) {
       setError(authFailure instanceof Error ? authFailure.message : "Unable to sign in.");
     } finally {
       setIsLoginLoading(false);
+    }
+  };
+
+  const handleResendLogin = async () => {
+    if (resendCooldown > 0 || isResendLoading) {
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setIsResendLoading(true);
+
+    try {
+      const challenge = await resendLogin(email.trim());
+
+      setEmail(challenge.email || email.trim());
+      setNotice(
+        challenge.message || "A new verification code has been sent to your email.",
+      );
+      setVerificationCode("");
+      setResendCooldown(challenge.resend_cooldown_seconds || 120);
+    } catch (resendFailure) {
+      setError(
+        resendFailure instanceof Error
+          ? resendFailure.message
+          : "Unable to resend verification code.",
+      );
+    } finally {
+      setIsResendLoading(false);
     }
   };
 
@@ -214,6 +258,19 @@ const AdminLogin = () => {
 
                   <Button
                     type="button"
+                    variant="ghost"
+                    className="h-10 w-full rounded-2xl text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                    disabled={resendCooldown > 0 || isResendLoading}
+                    onClick={() => void handleResendLogin()}
+                  >
+                    {isResendLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {resendCooldown > 0
+                      ? `Resend verification code in ${resendCooldown}s`
+                      : "Resend verification code"}
+                  </Button>
+
+                  <Button
+                    type="button"
                     variant="outline"
                     className="h-12 w-full rounded-2xl"
                     onClick={() => {
@@ -221,6 +278,7 @@ const AdminLogin = () => {
                       setVerificationCode("");
                       setNotice("");
                       setError("");
+                      setResendCooldown(120);
                       clearAuthError();
                     }}
                   >

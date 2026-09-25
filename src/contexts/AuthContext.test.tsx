@@ -58,6 +58,108 @@ describe("admin session storage", () => {
     vi.restoreAllMocks();
   });
 
+  it("resends the admin verification code", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ user: adminUser }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          message: "A new verification code has been sent to your email.",
+          email: adminUser.email,
+          expires_in_minutes: 15,
+          resend_cooldown_seconds: 120,
+        }),
+      );
+
+    const ResendHarness = () => {
+      const auth = useAuth();
+
+      return (
+        <div>
+          <button
+            onClick={() => {
+              void auth.resendLogin(adminUser.email).catch(() => undefined);
+            }}
+          >
+            resend
+          </button>
+          <span>{auth.authError ?? "no-error"}</span>
+        </div>
+      );
+    };
+
+    render(
+      <AuthProvider>
+        <ResendHarness />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("no-error")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "resend" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/admin/auth/login/resend"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            email: adminUser.email,
+          }),
+        }),
+      );
+    });
+
+    expect(screen.getByText("no-error")).toBeInTheDocument();
+  });
+
+  it("exposes resend errors through authError", async () => {
+    const ResendHarness = () => {
+      const auth = useAuth();
+
+      return (
+        <div>
+          <button
+            onClick={() => {
+              void auth.resendLogin(adminUser.email).catch(() => undefined);
+            }}
+          >
+            resend
+          </button>
+          <span>{auth.authError ?? "no-error"}</span>
+        </div>
+      );
+    };
+
+    render(
+      <AuthProvider>
+        <ResendHarness />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("no-error")).toBeInTheDocument());
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(
+        {
+          message: "Please wait before requesting another verification code.",
+        },
+        429,
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "resend" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Please wait before requesting another verification code."),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("stores verified sessions only in sessionStorage", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ token: "verified-token", user: adminUser }));
     renderAuth();

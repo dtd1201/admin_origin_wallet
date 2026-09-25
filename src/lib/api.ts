@@ -60,6 +60,7 @@ export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$
 export const adminAuthEndpointConfig = {
   login: import.meta.env.VITE_ADMIN_AUTH_LOGIN_PATH || "/admin/auth/login",
   loginVerify: import.meta.env.VITE_ADMIN_AUTH_LOGIN_VERIFY_PATH || "/admin/auth/login/verify",
+  loginResend: import.meta.env.VITE_ADMIN_AUTH_LOGIN_RESEND_PATH || "/admin/auth/login/resend",
   me: import.meta.env.VITE_ADMIN_AUTH_ME_PATH || "/admin/auth/me",
   logout: import.meta.env.VITE_ADMIN_AUTH_LOGOUT_PATH || "/admin/auth/logout",
 };

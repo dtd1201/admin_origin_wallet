@@ -19,6 +19,7 @@ interface AuthContextType {
   token: string | null;
   clearAuthError: () => void;
   login: (email: string, password: string) => Promise<AdminAuthChallenge>;
+  resendLogin: (email: string) => Promise<AdminAuthChallenge>;
   verifyLogin: (email: string, verificationCode: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
@@ -180,6 +181,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [clearSession]);
 
+  const resendLogin = useCallback(async (email: string) => {
+    try {
+      const payload = await requestApi<AdminAuthChallenge>(adminAuthEndpointConfig.loginResend, {
+        method: "POST",
+        body: { email },
+      });
+
+      setAuthError(null);
+      return payload;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to resend verification code";
+      setAuthError(message);
+      throw error;
+    }
+  }, []);
+
   const verifyLogin = useCallback(async (email: string, verificationCode: string) => {
     try {
       const payload = await requestApi<AdminAuthResponse>(adminAuthEndpointConfig.loginVerify, {
@@ -226,11 +243,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       token,
       clearAuthError,
       login,
+      resendLogin,
       verifyLogin,
       logout,
       refreshSession,
     }),
-    [authError, clearAuthError, loading, login, logout, refreshSession, token, user, verifyLogin],
+    [authError, clearAuthError, loading, login, logout, refreshSession, resendLogin, token, user, verifyLogin],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
