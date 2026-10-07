@@ -60,6 +60,10 @@ const displayKycStatus = (status?: string | null) => {
   return status || "-";
 };
 
+const readableStatus = (status?: string | null) => status
+  ? status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+  : "-";
+
 const statusClassName = (status: string) => {
   const normalized = status.toLowerCase();
 
@@ -691,7 +695,50 @@ const AdminKycReviews = () => {
 
           <div className="space-y-5">
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
-              <div className="overflow-x-auto">
+              <div className="space-y-3 p-3 md:hidden">
+                {rows.length > 0 ? rows.map((profile) => {
+                  const requiredRequirements = getRequiredRequirementCount(profile);
+
+                  return (
+                    <article key={profile.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-950">{getProfileName(profile)}</div>
+                          <div className="mt-1 truncate text-xs text-slate-500">
+                            {profile.user?.email ?? `User #${profile.user_id}`}
+                          </div>
+                        </div>
+                        <Badge className={statusClassName(displayKycStatus(profile.status))}>
+                          {displayKycStatus(profile.status)}
+                        </Badge>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                        <DetailItem label="Type" value={profile.applicant_type} />
+                        <DetailItem label="Country" value={profile.country_code || profile.registered_country_code || "-"} />
+                        <DetailItem label="Nium status" value={profile.provider_status || "-"} />
+                        <DetailItem label="Requirements" value={`${requiredRequirements} required`} />
+                        <DetailItem label="Documents" value={profile.documents?.length ?? 0} />
+                        <DetailItem label="Submitted" value={formatDate(profile.submitted_at)} />
+                      </div>
+                      <Button
+                        className="mt-4 w-full bg-slate-950 text-white hover:bg-slate-800"
+                        onClick={() => {
+                          setSelectedUserId(profile.user_id);
+                          setSelectedProfile(null);
+                          setReviewDialogOpen(true);
+                        }}
+                      >
+                        Review customer
+                      </Button>
+                    </article>
+                  );
+                }) : (
+                  <div className="py-12 text-center text-sm text-slate-500">
+                    {profilesQuery.isLoading ? "Loading KYC/KYB profiles..." : "No KYC/KYB profiles found."}
+                  </div>
+                )}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <Table className="min-w-[840px] table-fixed xl:min-w-0">
                   <TableHeader>
                     <TableRow>
@@ -836,25 +883,6 @@ const AdminKycReviews = () => {
                         {reviewMessage}
                       </div>
                     )}
-
-                    {profileDetailQuery.data?.biometric_kyc ? (
-                      <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
-                        <div className="font-semibold">Biometric KYC</div>
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                          <DetailItem label="KYC status" value={profileDetailQuery.data.biometric_kyc.status} />
-                          <Button type="button" size="sm" asChild className="bg-cyan-700 text-white hover:bg-cyan-800">
-                            <a
-                              href={profileDetailQuery.data.biometric_kyc.url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              Open Biometric KYC
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
 
                     {submitKycResult && (
                       <div role="status" className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
@@ -1298,6 +1326,32 @@ const AdminKycReviews = () => {
                     </Section> : null}
 
                     <Section title="Nium submission">
+                      {profileDetailQuery.data?.biometric_kyc ? (
+                        <div className="mb-4 rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-emerald-50 p-4 text-sm text-slate-900">
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Identity verification</div>
+                              <div className="mt-1 text-base font-semibold">Biometric KYC</div>
+                              <div className="mt-2 flex items-center gap-2 text-slate-600">
+                                <span>Current status</span>
+                                <Badge className={statusClassName(profileDetailQuery.data.biometric_kyc.status)}>
+                                  {readableStatus(profileDetailQuery.data.biometric_kyc.status)}
+                                </Badge>
+                              </div>
+                            </div>
+                            <Button type="button" asChild className="w-full bg-cyan-700 text-white hover:bg-cyan-800 sm:w-auto">
+                              <a
+                                href={profileDetailQuery.data.biometric_kyc.url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                                Open Biometric KYC
+                              </a>
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                       {providerSubmissionsQuery.isLoading ? (
                         <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
                           Loading Nium submission status...

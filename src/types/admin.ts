@@ -432,7 +432,7 @@ export interface AdminKycDetailResponse {
 }
 
 export interface AdminBiometricKycAction {
-  status: "initiated";
+  status: "initiated" | "retry";
   mode: "biometric_kyc";
   url: string;
   reference_id: string | null;
