@@ -837,6 +837,25 @@ const AdminKycReviews = () => {
                       </div>
                     )}
 
+                    {profileDetailQuery.data?.biometric_kyc ? (
+                      <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+                        <div className="font-semibold">Biometric KYC</div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                          <DetailItem label="KYC status" value={profileDetailQuery.data.biometric_kyc.status} />
+                          <Button type="button" size="sm" asChild className="bg-cyan-700 text-white hover:bg-cyan-800">
+                            <a
+                              href={profileDetailQuery.data.biometric_kyc.url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Open Biometric KYC
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
                     {submitKycResult && (
                       <div role="status" className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
                         <div className="font-semibold">Manual Nium Submit KYC result</div>

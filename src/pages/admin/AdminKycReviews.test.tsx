@@ -134,7 +134,7 @@ const renderPage = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.requestApi.mockResolvedValue(pageResponse);
-  apiMocks.getAdminKycProfile.mockResolvedValue({ user: profile.user, kyc_profile: detailProfile, kyc_submission: detailProfile });
+  apiMocks.getAdminKycProfile.mockResolvedValue({ user: profile.user, kyc_profile: detailProfile, kyc_submission: detailProfile, biometric_kyc: null });
   apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [] });
   apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [] });
   apiMocks.clearAdminAmlScreening.mockResolvedValue({ message: "Cleared", aml_screening: { ...amlScreening, status: "manual_clear" } });
@@ -152,6 +152,31 @@ it("loads selected customer data from the detail endpoint", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
   await waitFor(() => expect(apiMocks.getAdminKycProfile).toHaveBeenCalledWith(20, "admin-token"));
   expect((await screen.findAllByText("Detail Business Name")).length).toBeGreaterThan(0);
+});
+
+it("shows the current biometric KYC status and action from the authorized detail response", async () => {
+  const url = "https://idv.nium.com/prod/jumio/start?referenceNumber=current";
+  apiMocks.getAdminKycProfile.mockResolvedValue({
+    user: profile.user,
+    kyc_profile: detailProfile,
+    kyc_submission: detailProfile,
+    biometric_kyc: { status: "initiated", mode: "biometric_kyc", url, reference_id: "reference-current" },
+  });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText("Biometric KYC")).toBeVisible();
+  expect(screen.getByText("initiated")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Open Biometric KYC" })).toHaveAttribute("href", url);
+});
+
+it("does not show a biometric KYC action when the detail response has no current URL", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  await screen.findAllByText("Detail Business Name");
+  expect(screen.queryByRole("link", { name: "Open Biometric KYC" })).not.toBeInTheDocument();
 });
 
 it("displays company directors separately from related persons", async () => {

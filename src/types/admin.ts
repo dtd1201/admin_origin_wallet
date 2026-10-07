@@ -428,6 +428,14 @@ export interface AdminKycDetailResponse {
   user: AdminUser;
   kyc_profile: AdminKycProfile | null;
   kyc_submission: AdminKycProfile | null;
+  biometric_kyc?: AdminBiometricKycAction | null;
+}
+
+export interface AdminBiometricKycAction {
+  status: "initiated";
+  mode: "biometric_kyc";
+  url: string;
+  reference_id: string | null;
 }
 
 export type AdminKycProviderSubmissionStatus = "pending" | "submitted" | "failed";
