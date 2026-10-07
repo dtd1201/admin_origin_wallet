@@ -445,6 +445,57 @@ it("displays Nium submission tracking without metadata or raw identifiers", asyn
   expect(screen.queryByText("raw-external-id")).not.toBeInTheDocument();
 });
 
+it("confirms manual Submit KYC and displays the real Nium biometric URL", async () => {
+  const biometricUrl = "https://verify.example.test/real-nium-session";
+  apiMocks.requestApi
+    .mockResolvedValueOnce(pageResponse)
+    .mockResolvedValueOnce({
+      message: "Nium Submit KYC completed.",
+      state: "accepted",
+      kyc_status: "initiated",
+      kyc_mode: "biometric_kyc",
+      reference_id: "nium-reference-123",
+      biometric_url: biometricUrl,
+    });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Submit KYC" }));
+
+  expect(screen.getByText("Submit KYC to Nium?")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Confirm Submit KYC" }));
+
+  await waitFor(() => expect(apiMocks.requestApi).toHaveBeenNthCalledWith(
+    2,
+    "/admin/users/20/kyc-profile/submit-kyc",
+    { method: "POST", token: "admin-token" },
+  ));
+  expect(await screen.findByText("nium-reference-123")).toBeInTheDocument();
+  expect(screen.getByText("initiated")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open KYC" })).toHaveAttribute("href", biometricUrl);
+});
+
+it("states clearly when Nium returns no biometric URL", async () => {
+  apiMocks.requestApi
+    .mockResolvedValueOnce(pageResponse)
+    .mockResolvedValueOnce({
+      message: "Nium Submit KYC completed.",
+      state: "accepted",
+      kyc_status: "initiated",
+      kyc_mode: "biometric_kyc",
+      reference_id: "nium-reference-without-url",
+      biometric_url: null,
+    });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Submit KYC" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm Submit KYC" }));
+
+  expect(await screen.findByText("Nium did not return a biometric KYC URL.")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Open KYC" })).not.toBeInTheDocument();
+});
+
 it("submits approval once with only the review note and refreshes Nium state", async () => {
   let resolveApproval!: (value: unknown) => void;
   const approvalResponse = new Promise((resolve) => {

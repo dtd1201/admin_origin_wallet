@@ -415,6 +415,15 @@ export interface AdminKycReviewResponse {
   kyc_submission?: AdminKycProfile;
 }
 
+export interface AdminManualSubmitKycResponse {
+  message: string;
+  state: string | null;
+  kyc_status: string | null;
+  kyc_mode: string | null;
+  reference_id: string | null;
+  biometric_url: string | null;
+}
+
 export interface AdminKycDetailResponse {
   user: AdminUser;
   kyc_profile: AdminKycProfile | null;

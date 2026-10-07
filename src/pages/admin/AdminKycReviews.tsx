@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, CheckCircle2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, ExternalLink, Loader2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -18,6 +18,7 @@ import type {
   AdminKycCompanyDirector,
   AdminKycDocument,
   AdminKycProfile,
+  AdminManualSubmitKycResponse,
   AdminKycRelatedPerson,
   AdminKycRequirement,
   AdminKycReviewResponse,
@@ -285,6 +286,8 @@ const AdminKycReviews = () => {
   const [amlAction, setAmlAction] = useState<"confirm" | "clear" | null>(null);
   const [amlReviewNote, setAmlReviewNote] = useState("");
   const [amlActionError, setAmlActionError] = useState("");
+  const [submitKycDialogOpen, setSubmitKycDialogOpen] = useState(false);
+  const [submitKycResult, setSubmitKycResult] = useState<AdminManualSubmitKycResponse | null>(null);
 
   const queryPath = useMemo(() => {
     const params = new URLSearchParams({ page: String(page) });
@@ -338,6 +341,8 @@ const AdminKycReviews = () => {
     setAmlAction(null);
     setAmlReviewNote("");
     setAmlActionError("");
+    setSubmitKycDialogOpen(false);
+    setSubmitKycResult(null);
   }, [selectedProfile?.id]);
 
   const stats = useMemo(
@@ -413,6 +418,24 @@ const AdminKycReviews = () => {
     },
   });
   const approvalInFlightRef = useRef(false);
+
+  const submitKycMutation = useMutation({
+    mutationFn: async (profile: AdminKycProfile) =>
+      requestApi<AdminManualSubmitKycResponse>(`/admin/users/${profile.user_id}/kyc-profile/submit-kyc`, {
+        method: "POST",
+        token,
+      }),
+    onSuccess: (response) => {
+      setSubmitKycResult(response);
+      setSubmitKycDialogOpen(false);
+      setReviewError("");
+    },
+    onError: (error) => {
+      setSubmitKycResult(null);
+      setSubmitKycDialogOpen(false);
+      setReviewError(error instanceof Error ? error.message : "Unable to submit KYC to Nium.");
+    },
+  });
 
   const approveSelectedProfile = async (profile: AdminKycProfile) => {
     if (approvalInFlightRef.current) return;
@@ -797,6 +820,37 @@ const AdminKycReviews = () => {
                     {reviewMessage && (
                       <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                         {reviewMessage}
+                      </div>
+                    )}
+
+                    {submitKycResult && (
+                      <div role="status" className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+                        <div className="font-semibold">Manual Nium Submit KYC result</div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                          <DetailItem label="KYC status" value={submitKycResult.kyc_status || "-"} />
+                          <DetailItem label="KYC mode" value={submitKycResult.kyc_mode || "-"} />
+                          <DetailItem label="Nium reference ID" value={submitKycResult.reference_id || "-"} />
+                        </div>
+                        {submitKycResult.biometric_url ? (
+                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <a
+                              href={submitKycResult.biometric_url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="break-all text-cyan-800 underline underline-offset-4"
+                            >
+                              {submitKycResult.biometric_url}
+                            </a>
+                            <Button type="button" size="sm" asChild className="bg-cyan-700 text-white hover:bg-cyan-800">
+                              <a href={submitKycResult.biometric_url} target="_blank" rel="noreferrer noopener">
+                                <ExternalLink className="h-4 w-4" />
+                                Open KYC
+                              </a>
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mt-4 font-medium">Nium did not return a biometric KYC URL.</div>
+                        )}
                       </div>
                     )}
 
@@ -1295,6 +1349,16 @@ const AdminKycReviews = () => {
                       <Button
                         type="button"
                         variant="outline"
+                        className="rounded-2xl border-cyan-300 text-cyan-800 hover:bg-cyan-50"
+                        disabled={isReviewing || submitKycMutation.isPending}
+                        onClick={() => setSubmitKycDialogOpen(true)}
+                      >
+                        {submitKycMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        Submit KYC
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
                         className="rounded-2xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                         disabled={isReviewing}
                         onClick={() => setRejectDialogOpen(true)}
@@ -1369,6 +1433,31 @@ const AdminKycReviews = () => {
               onClick={() => selectedProfile && void rejectMutation.mutateAsync(selectedProfile)}
             >
               Reject profile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={submitKycDialogOpen} onOpenChange={setSubmitKycDialogOpen}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Submit KYC to Nium?</DialogTitle>
+            <DialogDescription>
+              This sends a new Submit KYC request for the customer&apos;s existing Nium account. It does not approve the profile or create another Nium customer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={submitKycMutation.isPending} onClick={() => setSubmitKycDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-cyan-700 text-white hover:bg-cyan-800"
+              disabled={!selectedProfile || submitKycMutation.isPending}
+              onClick={() => selectedProfile && submitKycMutation.mutate(selectedProfile)}
+            >
+              {submitKycMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Confirm Submit KYC
             </Button>
           </DialogFooter>
         </DialogContent>
