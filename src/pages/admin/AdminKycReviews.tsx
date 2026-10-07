@@ -418,6 +418,7 @@ const AdminKycReviews = () => {
     },
   });
   const approvalInFlightRef = useRef(false);
+  const submitKycInFlightRef = useRef(false);
 
   const submitKycMutation = useMutation({
     mutationFn: async (profile: AdminKycProfile) =>
@@ -436,6 +437,19 @@ const AdminKycReviews = () => {
       setReviewError(error instanceof Error ? error.message : "Unable to submit KYC to Nium.");
     },
   });
+
+  const submitSelectedKyc = async (profile: AdminKycProfile) => {
+    if (submitKycInFlightRef.current) return;
+
+    submitKycInFlightRef.current = true;
+    try {
+      await submitKycMutation.mutateAsync(profile);
+    } catch {
+      // React Query's onError handler owns the safe user-facing diagnostic.
+    } finally {
+      submitKycInFlightRef.current = false;
+    }
+  };
 
   const approveSelectedProfile = async (profile: AdminKycProfile) => {
     if (approvalInFlightRef.current) return;
@@ -1454,7 +1468,7 @@ const AdminKycReviews = () => {
               type="button"
               className="bg-cyan-700 text-white hover:bg-cyan-800"
               disabled={!selectedProfile || submitKycMutation.isPending}
-              onClick={() => selectedProfile && submitKycMutation.mutate(selectedProfile)}
+              onClick={() => selectedProfile && void submitSelectedKyc(selectedProfile)}
             >
               {submitKycMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Confirm Submit KYC

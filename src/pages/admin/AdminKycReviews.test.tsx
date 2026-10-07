@@ -475,6 +475,39 @@ it("confirms manual Submit KYC and displays the real Nium biometric URL", async 
   expect(screen.getByRole("link", { name: "Open KYC" })).toHaveAttribute("href", biometricUrl);
 });
 
+it("submits manual KYC only once on a rapid confirmation double-click", async () => {
+  let resolveSubmit!: (value: unknown) => void;
+  const submitResponse = new Promise((resolve) => {
+    resolveSubmit = resolve;
+  });
+  apiMocks.requestApi
+    .mockResolvedValueOnce(pageResponse)
+    .mockImplementationOnce(() => submitResponse);
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Submit KYC" }));
+
+  const confirmButton = screen.getByRole("button", { name: "Confirm Submit KYC" });
+  fireEvent.click(confirmButton);
+  fireEvent.click(confirmButton);
+
+  await waitFor(() => expect(
+    apiMocks.requestApi.mock.calls.filter(([path]) => path === "/admin/users/20/kyc-profile/submit-kyc"),
+  ).toHaveLength(1));
+
+  resolveSubmit({
+    message: "Nium Submit KYC completed.",
+    state: "accepted",
+    kyc_status: "initiated",
+    kyc_mode: "biometric_kyc",
+    reference_id: "nium-reference-once",
+    biometric_url: null,
+  });
+
+  expect(await screen.findByText("nium-reference-once")).toBeInTheDocument();
+});
+
 it("states clearly when Nium returns no biometric URL", async () => {
   apiMocks.requestApi
     .mockResolvedValueOnce(pageResponse)
