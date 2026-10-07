@@ -160,14 +160,14 @@ it("shows the current biometric KYC status and action from the authorized detail
     user: profile.user,
     kyc_profile: detailProfile,
     kyc_submission: detailProfile,
-    biometric_kyc: { status: "initiated", mode: "biometric_kyc", url, reference_id: "reference-current" },
+    biometric_kyc: { status: "retry", mode: "biometric_kyc", url, reference_id: "reference-current" },
   });
 
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
 
   expect(await screen.findByText("Biometric KYC")).toBeVisible();
-  expect(screen.getByText("initiated")).toBeVisible();
+  expect(screen.getByText("Retry")).toBeVisible();
   expect(screen.getByRole("link", { name: "Open Biometric KYC" })).toHaveAttribute("href", url);
 });
 

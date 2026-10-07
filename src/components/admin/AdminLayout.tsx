@@ -148,21 +148,21 @@ const AdminLayout = () => {
 
         <main className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_22%),linear-gradient(180deg,#08131e_0%,#0b1724_34%,#eef4f2_34%,#eef4f2_100%)]">
           <header className="z-20 shrink-0 border-b border-white/10 bg-[#08131e]">
-            <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
+            <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-6 sm:py-4 lg:px-10">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-300/75">Operations</p>
-                <h1 className="mt-1 text-2xl font-semibold text-white">Admin Workspace</h1>
+                <p className="hidden text-xs uppercase tracking-[0.3em] text-emerald-300/75 sm:block">Operations</p>
+                <h1 className="text-lg font-semibold text-white sm:mt-1 sm:text-2xl">Admin Workspace</h1>
               </div>
 
-              <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+              <div className="flex items-center justify-end gap-2 sm:gap-3">
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-white lg:hidden"
+                  className="rounded-full border-white/10 bg-white/5 px-3 text-white hover:bg-white/10 hover:text-white lg:hidden"
                   onClick={() => setMobileNavOpen((current) => !current)}
                 >
                   {mobileNavOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-                  Menu
+                  <span className="hidden sm:inline">Menu</span>
                 </Button>
 
                 <Button
@@ -218,8 +218,8 @@ const AdminLayout = () => {
             </div>
 
             {mobileNavOpen && (
-              <div className="border-t border-white/10 bg-[#071018] px-4 py-4 sm:px-6 lg:hidden">
-                <nav className="space-y-2">
+              <div className="max-h-[calc(100vh-64px)] overflow-y-auto border-t border-white/10 bg-[#071018] px-3 py-3 sm:px-6 lg:hidden">
+                <nav className="grid gap-1.5 sm:grid-cols-2">
                   {navItems.map((item) => (
                     <NavLink
                       key={item.to}
@@ -227,7 +227,7 @@ const AdminLayout = () => {
                       end={item.to === "/admin"}
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all",
+                          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
                           isActive
                             ? "bg-emerald-400 text-slate-950 shadow-[0_12px_30px_rgba(52,211,153,0.28)]"
                             : "text-slate-300 hover:bg-white/5 hover:text-white",
@@ -239,13 +239,6 @@ const AdminLayout = () => {
                     </NavLink>
                   ))}
                 </nav>
-
-                <div className="mt-4 rounded-[24px] border border-emerald-300/15 bg-gradient-to-br from-emerald-400/12 via-transparent to-cyan-400/10 p-4">
-                  <div className="text-xs uppercase tracking-[0.22em] text-emerald-200">Admin access</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">
-                    Manage users, providers, transactions, and contact submissions from the mobile admin workspace.
-                  </p>
-                </div>
               </div>
             )}
           </header>
