@@ -422,6 +422,7 @@ export interface AdminManualSubmitKycResponse {
   kyc_mode: string | null;
   reference_id: string | null;
   biometric_url: string | null;
+  compliance_review_pending?: boolean;
 }
 
 export interface AdminKycCorrectionValues {

@@ -222,6 +222,30 @@ it("shows correction before and after values and approves the exact version", as
   }));
 });
 
+it("shows approved Manual KYC evidence as ready to submit, not waiting for Nium", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{ ...correction, status: "manual_kyc_evidence_approved" }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText(/evidence approved for provider-directed manual kyc/i)).toBeVisible();
+  expect(screen.queryByText(/waiting for nium compliance review/i)).not.toBeInTheDocument();
+});
+
+it("shows waiting for Nium Compliance only after an accepted Manual KYC submission", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{ ...correction, status: "manual_kyc_compliance_review" }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText(/waiting for nium compliance review/i)).toBeVisible();
+  expect(screen.getByText(/customer identity fields have not been updated/i)).toBeVisible();
+});
+
 it("requires a reason when requesting correction changes", async () => {
   apiMocks.getAdminKycCorrections.mockResolvedValue({ data: [correction], permissions: { approve: true, request_changes: true, sync: true } });
   renderPage();

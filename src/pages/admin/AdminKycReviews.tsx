@@ -86,6 +86,8 @@ const correctionStatusOptions = [
   { value: "syncing", label: "Syncing" },
   { value: "verification_pending", label: "Verification pending" },
   { value: "sync_failed", label: "Sync failed" },
+  { value: "manual_kyc_evidence_approved", label: "Manual KYC evidence approved" },
+  { value: "manual_kyc_compliance_review", label: "Waiting for Nium Compliance" },
   { value: "unknown", label: "Unknown outcome" },
   { value: "synced", label: "Synced" },
 ] as const;
@@ -400,6 +402,8 @@ const AdminKycReviews = () => {
   }, [selectedProfile?.id]);
 
   const activeCorrection = correctionsQuery.data?.data.find((correction) => correction.status === "submitted")
+    ?? correctionsQuery.data?.data.find((correction) => correction.status === "manual_kyc_evidence_approved")
+    ?? correctionsQuery.data?.data.find((correction) => correction.status === "manual_kyc_compliance_review")
     ?? correctionsQuery.data?.data[0]
     ?? null;
 
@@ -1109,6 +1113,16 @@ const AdminKycReviews = () => {
                           </Table>
                           {activeCorrection.proposed_documents?.length ? <div className="mt-4 space-y-2"><div className="text-sm font-semibold">Submitted documents</div>{activeCorrection.proposed_documents.map((document, index) => <div key={`${document.type}-${index}`} className="flex items-center justify-between rounded-xl bg-white/70 p-3 text-sm"><span>{document.type}: {document.original_name || "Uploaded evidence"}</span>{document.file_url ? <a className="text-cyan-700 underline" href={buildApiUrl(document.file_url)} target="_blank" rel="noreferrer noopener">Review document</a> : null}</div>)}</div> : null}
                           {activeCorrection.review_note ? <div className="mt-3 text-sm text-amber-800">Review note: {activeCorrection.review_note}</div> : null}
+                          {activeCorrection.status === "manual_kyc_evidence_approved" ? (
+                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                              Evidence approved for provider-directed Manual KYC. Use the existing Submit KYC action, then notify Su for Nium Compliance review. This does not update Customer identity fields.
+                            </div>
+                          ) : null}
+                          {activeCorrection.status === "manual_kyc_compliance_review" ? (
+                            <div className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-950">
+                              Waiting for Nium Compliance review. Notify Su for provider review. Customer identity fields have not been updated by this submission.
+                            </div>
+                          ) : null}
                           {activeCorrection.sync ? (
                             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm">
                               <div className="font-semibold text-slate-900">Nium synchronization</div>
