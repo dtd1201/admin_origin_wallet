@@ -424,6 +424,74 @@ export interface AdminManualSubmitKycResponse {
   biometric_url: string | null;
 }
 
+export interface AdminKycCorrectionValues {
+  legal_name: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+}
+
+export interface AdminKycCorrection {
+  id: number;
+  kyc_profile_id: number;
+  applicant_related_person_id: number;
+  correction_version: number;
+  source_fingerprint: string;
+  status: "submitted" | "approved" | "needs_more_info" | string;
+  before_values: AdminKycCorrectionValues;
+  proposed_values: AdminKycCorrectionValues;
+  requested_fields?: Array<keyof AdminKycCorrectionValues>;
+  requested_document_types?: string[];
+  proposed_documents?: Array<{ type: string; file_url?: string | null; file_hash?: string | null; original_name?: string | null }>;
+  request_instruction?: string | null;
+  request_origin?: string;
+  customer_hash_fingerprint: string;
+  applicant_reference_fingerprint: string;
+  review_note?: string | null;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  resolved_at?: string | null;
+  reviewed_by?: Pick<AdminUser, "id" | "email" | "full_name"> | null;
+  sync?: {
+    can_sync: boolean;
+    reason?: string | null;
+    status?: string | null;
+    request_id?: string | null;
+    request_fingerprint?: string | null;
+    http_status?: number | null;
+    failure_code?: string | null;
+    verification?: { verified: boolean; checks: Record<string, boolean> } | null;
+    started_at?: string | null;
+    verified_at?: string | null;
+    can_reconcile: boolean;
+    can_resolve_failure: boolean;
+  };
+  review_capability?: {
+    can_approve: boolean;
+    reason?: string | null;
+  };
+}
+
+export interface AdminKycCorrectionListResponse {
+  data: AdminKycCorrection[];
+  permissions: {
+    approve: boolean;
+    request_changes: boolean;
+    sync: boolean;
+  };
+}
+
+export interface AdminKycCorrectionReviewResponse {
+  message: string;
+  correction: AdminKycCorrection;
+  idempotent: boolean;
+}
+
+export interface AdminKycCorrectionSyncResponse {
+  message: string;
+  correction: AdminKycCorrection;
+}
+
 export interface AdminKycDetailResponse {
   user: AdminUser;
   kyc_profile: AdminKycProfile | null;

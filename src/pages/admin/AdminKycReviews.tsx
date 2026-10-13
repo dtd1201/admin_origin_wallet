@@ -9,13 +9,19 @@ import {
   confirmAdminAmlMatch,
   getAdminAmlScreenings,
   getAdminKycProfile,
+  getAdminKycCorrections,
   getAdminKycProviderSubmissions,
   requestApi,
+  reviewAdminKycCorrection,
+  resolveAdminKycCorrectionFailure,
+  requestAdminKycCorrection,
+  syncAdminKycCorrection,
   type PaginatedResponse,
 } from "@/lib/api";
 import type {
   AdminAmlScreening,
   AdminKycCompanyDirector,
+  AdminKycCorrection,
   AdminKycDocument,
   AdminKycProfile,
   AdminManualSubmitKycResponse,
@@ -63,6 +69,26 @@ const displayKycStatus = (status?: string | null) => {
 const readableStatus = (status?: string | null) => status
   ? status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
   : "-";
+
+const correctionStatusLabel = (status: string) => ({
+  submitted: "Pending review",
+  requested: "Waiting for customer",
+  approved: "Approved",
+  needs_more_info: "Needs more information",
+}[status] ?? readableStatus(status));
+
+const correctionStatusOptions = [
+  { value: "all", label: "All correction statuses" },
+  { value: "submitted", label: "Pending review" },
+  { value: "requested", label: "Waiting for customer" },
+  { value: "approved", label: "Approved" },
+  { value: "needs_more_info", label: "Needs more information" },
+  { value: "syncing", label: "Syncing" },
+  { value: "verification_pending", label: "Verification pending" },
+  { value: "sync_failed", label: "Sync failed" },
+  { value: "unknown", label: "Unknown outcome" },
+  { value: "synced", label: "Synced" },
+] as const;
 
 const statusClassName = (status: string) => {
   const normalized = status.toLowerCase();
@@ -292,6 +318,15 @@ const AdminKycReviews = () => {
   const [amlActionError, setAmlActionError] = useState("");
   const [submitKycDialogOpen, setSubmitKycDialogOpen] = useState(false);
   const [submitKycResult, setSubmitKycResult] = useState<AdminManualSubmitKycResponse | null>(null);
+  const [correctionChangesOpen, setCorrectionChangesOpen] = useState(false);
+  const [correctionChangesReason, setCorrectionChangesReason] = useState("");
+  const [failureResolutionOpen, setFailureResolutionOpen] = useState(false);
+  const [failureResolutionReason, setFailureResolutionReason] = useState("");
+  const [correctionStatusFilter, setCorrectionStatusFilter] = useState<(typeof correctionStatusOptions)[number]["value"]>("all");
+  const [scopedRequestOpen, setScopedRequestOpen] = useState(false);
+  const [scopedRequestFields, setScopedRequestFields] = useState<string[]>([]);
+  const [scopedRequestPassport, setScopedRequestPassport] = useState(false);
+  const [scopedRequestInstruction, setScopedRequestInstruction] = useState("");
 
   const queryPath = useMemo(() => {
     const params = new URLSearchParams({ page: String(page) });
@@ -316,6 +351,16 @@ const AdminKycReviews = () => {
     queryKey: ["admin", "kyc-provider-submissions", selectedUserId, token],
     enabled: !!token && reviewDialogOpen && selectedUserId !== null,
     queryFn: () => getAdminKycProviderSubmissions(selectedUserId as number, token),
+  });
+
+  const correctionsQuery = useQuery({
+    queryKey: ["admin", "kyc-corrections", selectedUserId, correctionStatusFilter, token],
+    enabled: !!token && reviewDialogOpen && selectedUserId !== null,
+    queryFn: () => getAdminKycCorrections(
+      selectedUserId as number,
+      token,
+      correctionStatusFilter === "all" ? undefined : correctionStatusFilter,
+    ),
   });
 
   const amlScreeningsQuery = useQuery({
@@ -347,7 +392,93 @@ const AdminKycReviews = () => {
     setAmlActionError("");
     setSubmitKycDialogOpen(false);
     setSubmitKycResult(null);
+    setCorrectionChangesOpen(false);
+    setCorrectionChangesReason("");
+    setFailureResolutionOpen(false);
+    setFailureResolutionReason("");
+    setCorrectionStatusFilter("all");
   }, [selectedProfile?.id]);
+
+  const activeCorrection = correctionsQuery.data?.data.find((correction) => correction.status === "submitted")
+    ?? correctionsQuery.data?.data[0]
+    ?? null;
+
+  const correctionReviewMutation = useMutation({
+    mutationFn: ({ correction, action, reason }: { correction: AdminKycCorrection; action: "approve" | "request-changes"; reason?: string }) =>
+      reviewAdminKycCorrection({
+        userId: selectedUserId as number,
+        correctionId: correction.id,
+        action,
+        correctionVersion: correction.correction_version,
+        sourceFingerprint: correction.source_fingerprint,
+        token,
+        reason,
+      }),
+    onSuccess: async (response) => {
+      setReviewError("");
+      setReviewMessage(response.message);
+      setCorrectionChangesOpen(false);
+      setCorrectionChangesReason("");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId, token] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to review the KYC correction."),
+  });
+
+  const scopedRequestMutation = useMutation({
+    mutationFn: () => requestAdminKycCorrection({
+      userId: selectedUserId as number,
+      fields: scopedRequestFields,
+      documentTypes: scopedRequestPassport ? ["passport"] : [],
+      instruction: scopedRequestInstruction.trim(),
+      token,
+    }),
+    onSuccess: async () => {
+      setScopedRequestOpen(false); setScopedRequestFields([]); setScopedRequestPassport(false); setScopedRequestInstruction("");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to request the scoped KYC update."),
+  });
+
+  const correctionSyncMutation = useMutation({
+    mutationFn: ({ correction, action }: { correction: AdminKycCorrection; action: "sync" | "reconcile" }) =>
+      syncAdminKycCorrection({
+        userId: selectedUserId as number,
+        correctionId: correction.id,
+        action,
+        token,
+      }),
+    onSuccess: async (response) => {
+      setReviewError("");
+      setReviewMessage(response.message);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId, token] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-profile-detail", selectedUserId, token] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to synchronize the KYC correction."),
+  });
+
+  const failureResolutionMutation = useMutation({
+    mutationFn: ({ correction, reason }: { correction: AdminKycCorrection; reason: string }) => {
+      if (!correction.sync?.request_id || !correction.sync.request_fingerprint) {
+        throw new Error("Deterministic failure evidence is incomplete.");
+      }
+      return resolveAdminKycCorrectionFailure({
+        userId: selectedUserId as number,
+        correctionId: correction.id,
+        requestId: correction.sync.request_id,
+        requestFingerprint: correction.sync.request_fingerprint,
+        reason,
+        token,
+      });
+    },
+    onSuccess: async (response) => {
+      setReviewError("");
+      setReviewMessage(response.message);
+      setFailureResolutionOpen(false);
+      setFailureResolutionReason("");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId, token] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to resolve the deterministic failure."),
+  });
 
   const stats = useMemo(
     () => [
@@ -425,10 +556,11 @@ const AdminKycReviews = () => {
   const submitKycInFlightRef = useRef(false);
 
   const submitKycMutation = useMutation({
-    mutationFn: async (profile: AdminKycProfile) =>
+    mutationFn: async ({ profile, idempotencyKey }: { profile: AdminKycProfile; idempotencyKey: string }) =>
       requestApi<AdminManualSubmitKycResponse>(`/admin/users/${profile.user_id}/kyc-profile/submit-kyc`, {
         method: "POST",
         token,
+        headers: { "Idempotency-Key": idempotencyKey },
       }),
     onSuccess: (response) => {
       setSubmitKycResult(response);
@@ -447,7 +579,10 @@ const AdminKycReviews = () => {
 
     submitKycInFlightRef.current = true;
     try {
-      await submitKycMutation.mutateAsync(profile);
+      await submitKycMutation.mutateAsync({
+        profile,
+        idempotencyKey: globalThis.crypto.randomUUID(),
+      });
     } catch {
       // React Query's onError handler owns the safe user-facing diagnostic.
     } finally {
@@ -894,18 +1029,10 @@ const AdminKycReviews = () => {
                         </div>
                         {submitKycResult.biometric_url ? (
                           <div className="mt-4 flex flex-wrap items-center gap-3">
-                            <a
-                              href={submitKycResult.biometric_url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="break-all text-cyan-800 underline underline-offset-4"
-                            >
-                              {submitKycResult.biometric_url}
-                            </a>
                             <Button type="button" size="sm" asChild className="bg-cyan-700 text-white hover:bg-cyan-800">
                               <a href={submitKycResult.biometric_url} target="_blank" rel="noreferrer noopener">
                                 <ExternalLink className="h-4 w-4" />
-                                Open KYC
+                                Continue KYC
                               </a>
                             </Button>
                           </div>
@@ -937,6 +1064,105 @@ const AdminKycReviews = () => {
                         <DetailItem label="Reviewed" value={formatDate(selectedProfile.reviewed_at)} />
                       </div>
                     </div>
+
+                    <div className="flex justify-end">
+                      {correctionsQuery.data?.permissions.request_changes ? (
+                        <Button type="button" variant="outline" className="mr-3" onClick={() => setScopedRequestOpen(true)}>Request KYC Update</Button>
+                      ) : null}
+                      <Select value={correctionStatusFilter} onValueChange={(value) => setCorrectionStatusFilter(value as typeof correctionStatusFilter)}>
+                        <SelectTrigger className="w-full sm:w-64" aria-label="Correction status filter"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {correctionStatusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {correctionsQuery.isLoading ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">Loading applicant corrections...</div>
+                    ) : activeCorrection ? (
+                      <Section title="Applicant correction review">
+                        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-cyan-950">Correction version {activeCorrection.correction_version}</div>
+                              <div className="mt-1 text-xs text-cyan-800">Submitted {formatDate(activeCorrection.submitted_at)}</div>
+                            </div>
+                            <Badge className={statusClassName(activeCorrection.status)}>{correctionStatusLabel(activeCorrection.status)}</Badge>
+                          </div>
+                          {activeCorrection.request_instruction ? <div className="mt-3 rounded-xl bg-white/70 p-3 text-sm text-cyan-950"><span className="font-medium">Admin instruction:</span> {activeCorrection.request_instruction}</div> : null}
+                          <Table className="mt-4">
+                            <TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Approved value</TableHead><TableHead>Proposed value</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                              {([
+                                ["Legal name", "legal_name"],
+                                ["First Name (Given Names)", "first_name"],
+                                ["Last Name (Surname / Family Name)", "last_name"],
+                                ["Date of birth", "date_of_birth"],
+                              ] as const).map(([label, field]) => (
+                                <TableRow key={field}>
+                                  <TableCell className="font-medium">{label}</TableCell>
+                                  <TableCell>{activeCorrection.before_values[field] || "-"}</TableCell>
+                                  <TableCell className="font-semibold text-cyan-950">{activeCorrection.proposed_values[field] || "-"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          {activeCorrection.proposed_documents?.length ? <div className="mt-4 space-y-2"><div className="text-sm font-semibold">Submitted documents</div>{activeCorrection.proposed_documents.map((document, index) => <div key={`${document.type}-${index}`} className="flex items-center justify-between rounded-xl bg-white/70 p-3 text-sm"><span>{document.type}: {document.original_name || "Uploaded evidence"}</span>{document.file_url ? <a className="text-cyan-700 underline" href={buildApiUrl(document.file_url)} target="_blank" rel="noreferrer noopener">Review document</a> : null}</div>)}</div> : null}
+                          {activeCorrection.review_note ? <div className="mt-3 text-sm text-amber-800">Review note: {activeCorrection.review_note}</div> : null}
+                          {activeCorrection.sync ? (
+                            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                              <div className="font-semibold text-slate-900">Nium synchronization</div>
+                              <div className="mt-1 text-slate-600">Status: {readableStatus(activeCorrection.sync.status || "not_started")}</div>
+                              {activeCorrection.sync.reason ? <div className="mt-1 text-amber-700">{activeCorrection.sync.reason}</div> : null}
+                              {activeCorrection.sync.request_fingerprint ? <div className="mt-1 font-mono text-xs text-slate-500">Request fingerprint: {activeCorrection.sync.request_fingerprint}</div> : null}
+                              {activeCorrection.sync.verification ? (
+                                <div className="mt-2 grid gap-1 md:grid-cols-2">
+                                  {Object.entries(activeCorrection.sync.verification.checks).map(([check, passed]) => (
+                                    <div key={check} className={passed ? "text-emerald-700" : "text-red-700"}>
+                                      {readableStatus(check)}: {passed ? "Verified" : "Mismatch"}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {correctionsQuery.data?.permissions.sync && activeCorrection.sync.can_sync ? (
+                                <Button className="mt-3" type="button" disabled={correctionSyncMutation.isPending} onClick={() => correctionSyncMutation.mutate({ correction: activeCorrection, action: "sync" })}>
+                                  {correctionSyncMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                  Sync approved correction
+                                </Button>
+                              ) : null}
+                              {correctionsQuery.data?.permissions.sync && activeCorrection.sync.can_reconcile ? (
+                                <Button className="mt-3" variant="outline" type="button" disabled={correctionSyncMutation.isPending} onClick={() => correctionSyncMutation.mutate({ correction: activeCorrection, action: "reconcile" })}>
+                                  Reconcile with Nium GET
+                                </Button>
+                              ) : null}
+                              {correctionsQuery.data?.permissions.sync && activeCorrection.sync.can_resolve_failure ? (
+                                <Button className="mt-3" variant="outline" type="button" disabled={failureResolutionMutation.isPending} onClick={() => setFailureResolutionOpen(true)}>
+                                  Close deterministic failure
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {activeCorrection.status === "submitted" ? (
+                            <div className="mt-4 flex flex-wrap gap-3">
+                              {correctionsQuery.data?.permissions.approve && activeCorrection.review_capability?.can_approve ? (
+                                <Button
+                                  type="button"
+                                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                  disabled={correctionReviewMutation.isPending}
+                                  onClick={() => correctionReviewMutation.mutate({ correction: activeCorrection, action: "approve" })}
+                                >Approve correction</Button>
+                              ) : null}
+                              {activeCorrection.review_capability?.reason ? <div className="text-sm text-amber-800">Approval unavailable: {activeCorrection.review_capability.reason}</div> : null}
+                              {correctionsQuery.data?.permissions.request_changes ? (
+                                <Button type="button" variant="outline" disabled={correctionReviewMutation.isPending} onClick={() => setCorrectionChangesOpen(true)}>
+                                  Request correction changes
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </Section>
+                    ) : null}
 
                     <Section title="Profile information">
                       <div className="mb-3 flex justify-end">
@@ -1551,6 +1777,33 @@ const AdminKycReviews = () => {
       </Dialog>
 
       <Dialog
+        open={correctionChangesOpen}
+        onOpenChange={(open) => {
+          setCorrectionChangesOpen(open);
+          if (!open) setCorrectionChangesReason("");
+        }}
+      >
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Request correction changes</DialogTitle>
+            <DialogDescription>Explain what must be corrected before this applicant change can be approved.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="correction-changes-reason">Reason sent to customer</Label>
+            <Textarea id="correction-changes-reason" value={correctionChangesReason} onChange={(event) => setCorrectionChangesReason(event.target.value)} className="min-h-28" />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCorrectionChangesOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              disabled={!activeCorrection || !correctionChangesReason.trim() || correctionReviewMutation.isPending}
+              onClick={() => activeCorrection && correctionReviewMutation.mutate({ correction: activeCorrection, action: "request-changes", reason: correctionChangesReason.trim() })}
+            >Send request</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={amlAction !== null}
         onOpenChange={(open) => {
           if (!open) closeAmlAction();
@@ -1671,6 +1924,51 @@ const AdminKycReviews = () => {
               Send update request
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={failureResolutionOpen} onOpenChange={setFailureResolutionOpen}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Close deterministic Nium failure</DialogTitle>
+            <DialogDescription>
+              This only closes a confirmed 4xx attempt and returns the correction to the customer. It does not send another PUT.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="failure-resolution-reason">Reason sent to customer</Label>
+            <Textarea
+              id="failure-resolution-reason"
+              value={failureResolutionReason}
+              onChange={(event) => setFailureResolutionReason(event.target.value)}
+              placeholder="Explain what must be corrected before a new version is submitted."
+              className="min-h-28"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setFailureResolutionOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              disabled={!activeCorrection || !failureResolutionReason.trim() || failureResolutionMutation.isPending}
+              onClick={() => activeCorrection && failureResolutionMutation.mutate({ correction: activeCorrection, reason: failureResolutionReason.trim() })}
+            >Return for new correction</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={scopedRequestOpen} onOpenChange={setScopedRequestOpen}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader><DialogTitle>Request KYC Update</DialogTitle><DialogDescription>Corporate HK applicant only. The approved KYC record is not changed.</DialogDescription></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm font-medium">Applicant fields</div>
+            {([['legal_name','Legal name'],['first_name','First Name (Given Names)'],['last_name','Last Name (Surname)'],['date_of_birth','Date of birth']] as const).map(([field,label]) => (
+              <label key={field} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scopedRequestFields.includes(field)} onChange={(event) => setScopedRequestFields((current) => event.target.checked ? [...current, field] : current.filter((value) => value !== field))} />{label}</label>
+            ))}
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scopedRequestPassport} onChange={(event) => setScopedRequestPassport(event.target.checked)} />Passport document (required)</label>
+            <Label htmlFor="scoped-request-instruction">Instructions to customer</Label>
+            <Textarea id="scoped-request-instruction" value={scopedRequestInstruction} onChange={(event) => setScopedRequestInstruction(event.target.value)} />
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setScopedRequestOpen(false)}>Cancel</Button><Button disabled={scopedRequestMutation.isPending || !scopedRequestInstruction.trim() || (scopedRequestFields.length === 0 && !scopedRequestPassport)} onClick={() => scopedRequestMutation.mutate()}>Send KYC update request</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

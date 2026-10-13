@@ -117,6 +117,76 @@ export const getAdminKycProviderSubmissions = (userId: number, token?: string | 
     { method: "GET", token },
   );
 
+export const getAdminKycCorrections = (userId: number, token?: string | null, status?: string) =>
+  requestApi<import("@/types/admin").AdminKycCorrectionListResponse>(
+    `/admin/users/${userId}/kyc-profile/corrections${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    { method: "GET", token },
+  );
+
+export const requestAdminKycCorrection = (params: {
+  userId: number;
+  fields: string[];
+  documentTypes: string[];
+  instruction: string;
+  token?: string | null;
+}) => requestApi<import("@/types/admin").AdminKycCorrectionReviewResponse>(
+  `/admin/users/${params.userId}/kyc-profile/corrections/request-update`,
+  { method: "POST", token: params.token, body: {
+    subject: "applicant", fields: params.fields, document_types: params.documentTypes, instruction: params.instruction,
+  } },
+);
+
+export const reviewAdminKycCorrection = (params: {
+  userId: number;
+  correctionId: number;
+  action: "approve" | "request-changes";
+  correctionVersion: number;
+  sourceFingerprint: string;
+  token?: string | null;
+  reason?: string;
+}) => requestApi<import("@/types/admin").AdminKycCorrectionReviewResponse>(
+  `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/${params.action}`,
+  {
+    method: "POST",
+    token: params.token,
+    body: {
+      correction_version: params.correctionVersion,
+      source_fingerprint: params.sourceFingerprint,
+      ...(params.reason ? { reason: params.reason } : {}),
+    },
+  },
+);
+
+export const syncAdminKycCorrection = (params: {
+  userId: number;
+  correctionId: number;
+  action?: "sync" | "reconcile";
+  token?: string | null;
+}) => requestApi<import("@/types/admin").AdminKycCorrectionSyncResponse>(
+  `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/${params.action ?? "sync"}`,
+  { method: "POST", token: params.token, body: {} },
+);
+
+export const resolveAdminKycCorrectionFailure = (params: {
+  userId: number;
+  correctionId: number;
+  requestId: string;
+  requestFingerprint: string;
+  reason: string;
+  token?: string | null;
+}) => requestApi<import("@/types/admin").AdminKycCorrectionSyncResponse>(
+  `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/resolve-failure`,
+  {
+    method: "POST",
+    token: params.token,
+    body: {
+      request_id: params.requestId,
+      request_fingerprint: params.requestFingerprint,
+      reason: params.reason,
+    },
+  },
+);
+
 export const getAdminProviderAccountSubmissions = (page: number, token?: string | null) =>
   requestApi<PaginatedResponse<AdminKycProviderSubmission>>(
     `${adminEndpointConfig.kycProviderSubmissions}?page=${page}`,
@@ -274,10 +344,12 @@ export const requestApi = async <TResponse>(
     method = "GET",
     body,
     token,
+    headers,
   }: {
     method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: Record<string, unknown>;
     token?: string | null;
+    headers?: Record<string, string>;
   } = {},
 ): Promise<TResponse> => {
   const url = buildApiUrl(path);
@@ -290,6 +362,7 @@ export const requestApi = async <TResponse>(
         Accept: "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });

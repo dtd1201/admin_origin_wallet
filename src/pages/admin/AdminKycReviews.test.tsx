@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdminKycReviews from "@/pages/admin/AdminKycReviews";
-import type { AdminAmlScreening, AdminKycProfile, AdminKycProviderSubmission } from "@/types/admin";
+import type { AdminAmlScreening, AdminKycCorrection, AdminKycProfile, AdminKycProviderSubmission } from "@/types/admin";
 
 const apiMocks = vi.hoisted(() => ({
   requestApi: vi.fn(),
@@ -10,6 +10,11 @@ const apiMocks = vi.hoisted(() => ({
   getAdminAmlScreenings: vi.fn(),
   clearAdminAmlScreening: vi.fn(),
   confirmAdminAmlMatch: vi.fn(),
+  getAdminKycCorrections: vi.fn(),
+  reviewAdminKycCorrection: vi.fn(),
+  syncAdminKycCorrection: vi.fn(),
+  resolveAdminKycCorrectionFailure: vi.fn(),
+  requestAdminKycCorrection: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -21,6 +26,11 @@ vi.mock("@/lib/api", () => ({
   getAdminAmlScreenings: apiMocks.getAdminAmlScreenings,
   clearAdminAmlScreening: apiMocks.clearAdminAmlScreening,
   confirmAdminAmlMatch: apiMocks.confirmAdminAmlMatch,
+  getAdminKycCorrections: apiMocks.getAdminKycCorrections,
+  reviewAdminKycCorrection: apiMocks.reviewAdminKycCorrection,
+  syncAdminKycCorrection: apiMocks.syncAdminKycCorrection,
+  resolveAdminKycCorrectionFailure: apiMocks.resolveAdminKycCorrectionFailure,
+  requestAdminKycCorrection: apiMocks.requestAdminKycCorrection,
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: "admin-token" }) }));
@@ -84,6 +94,21 @@ const providerSubmission: AdminKycProviderSubmission = {
   review_note: "Awaiting compliance review",
 };
 
+const correction: AdminKycCorrection = {
+  id: 71,
+  kyc_profile_id: 10,
+  applicant_related_person_id: 72,
+  correction_version: 1,
+  source_fingerprint: "a".repeat(64),
+  status: "submitted",
+  before_values: { legal_name: "NGUYEN THANH PHUONG", first_name: "THANH PHUONG", last_name: "NGUYEN", date_of_birth: "1990-01-01" },
+  proposed_values: { legal_name: "NGUYEN VAN THANH PHUONG", first_name: "THANH PHUONG", last_name: "NGUYEN VAN", date_of_birth: "1991-02-03" },
+  customer_hash_fingerprint: "b".repeat(64),
+  applicant_reference_fingerprint: "c".repeat(64),
+  submitted_at: "2026-10-12T10:00:00Z",
+  review_capability: { can_approve: true, reason: null },
+};
+
 const amlScreening: AdminAmlScreening = {
   id: 51,
   user_id: 20,
@@ -139,6 +164,206 @@ beforeEach(() => {
   apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [] });
   apiMocks.clearAdminAmlScreening.mockResolvedValue({ message: "Cleared", aml_screening: { ...amlScreening, status: "manual_clear" } });
   apiMocks.confirmAdminAmlMatch.mockResolvedValue({ message: "Confirmed", aml_screening: { ...amlScreening, status: "confirmed_match" } });
+  apiMocks.getAdminKycCorrections.mockResolvedValue({ data: [], permissions: { approve: true, request_changes: true, sync: true } });
+  apiMocks.reviewAdminKycCorrection.mockResolvedValue({ message: "Correction reviewed", correction: { ...correction, status: "approved" }, idempotent: false });
+  apiMocks.syncAdminKycCorrection.mockResolvedValue({ message: "Correction synced", correction: { ...correction, status: "synced" } });
+  apiMocks.resolveAdminKycCorrectionFailure.mockResolvedValue({ message: "Failure closed", correction: { ...correction, status: "needs_more_info" } });
+  apiMocks.requestAdminKycCorrection.mockResolvedValue({ message: "Requested", correction: { ...correction, status: "requested" }, idempotent: false });
+});
+
+it("creates a scoped applicant field and passport update request", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({ data: [], permissions: { approve: true, request_changes: true, sync: true } });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Request KYC Update" }));
+  fireEvent.click(screen.getByLabelText("First Name (Given Names)"));
+  fireEvent.click(screen.getByLabelText("Passport document (required)"));
+  fireEvent.change(screen.getByLabelText("Instructions to customer"), { target: { value: "Correct the given names and upload passport." } });
+  fireEvent.click(screen.getByRole("button", { name: "Send KYC update request" }));
+
+  await waitFor(() => expect(apiMocks.requestAdminKycCorrection).toHaveBeenCalledWith({
+    userId: 20, fields: ["first_name"], documentTypes: ["passport"],
+    instruction: "Correct the given names and upload passport.", token: "admin-token",
+}));
+});
+
+it("creates a passport-only update request", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Request KYC Update" }));
+  fireEvent.click(screen.getByLabelText("Passport document (required)"));
+  fireEvent.change(screen.getByLabelText("Instructions to customer"), { target: { value: "Upload a readable passport." } });
+  fireEvent.click(screen.getByRole("button", { name: "Send KYC update request" }));
+
+  await waitFor(() => expect(apiMocks.requestAdminKycCorrection).toHaveBeenCalledWith({
+    userId: 20, fields: [], documentTypes: ["passport"],
+    instruction: "Upload a readable passport.", token: "admin-token",
+  }));
+});
+
+it("shows correction before and after values and approves the exact version", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({ data: [correction], permissions: { approve: true, request_changes: true, sync: true } });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText("Applicant correction review")).toBeVisible();
+  expect(screen.getByText("NGUYEN THANH PHUONG")).toBeVisible();
+  expect(screen.getByText("NGUYEN VAN THANH PHUONG")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Approve correction" }));
+
+  await waitFor(() => expect(apiMocks.reviewAdminKycCorrection).toHaveBeenCalledWith({
+    userId: 20,
+    correctionId: 71,
+    action: "approve",
+    correctionVersion: 1,
+    sourceFingerprint: "a".repeat(64),
+    token: "admin-token",
+    reason: undefined,
+  }));
+});
+
+it("requires a reason when requesting correction changes", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({ data: [correction], permissions: { approve: true, request_changes: true, sync: true } });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Request correction changes" }));
+
+  const send = screen.getByRole("button", { name: "Send request" });
+  expect(send).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Reason sent to customer"), { target: { value: "Surname does not match passport" } });
+  fireEvent.click(send);
+
+  await waitFor(() => expect(apiMocks.reviewAdminKycCorrection).toHaveBeenCalledWith(expect.objectContaining({
+    action: "request-changes",
+    reason: "Surname does not match passport",
+  })));
+});
+
+it("does not render correction actions without backend permissions or after review", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{ ...correction, status: "approved" }],
+    permissions: { approve: false, request_changes: false, sync: false },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText("Approved")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Approve correction" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Request correction changes" })).not.toBeInTheDocument();
+});
+
+it("shows the backend approval block reason instead of an approve action", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{ ...correction, review_capability: { can_approve: false, reason: "Nium Customer Update is disabled." } }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByText(/approval unavailable: nium customer update is disabled/i)).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Approve correction" })).not.toBeInTheDocument();
+});
+
+it("filters correction synchronization and reconciliation statuses through the backend", async () => {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("combobox", { name: "Correction status filter" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Unknown outcome" }));
+
+  await waitFor(() => expect(apiMocks.getAdminKycCorrections).toHaveBeenLastCalledWith(20, "admin-token", "unknown"));
+});
+
+it("only exposes backend-authorized sync and shows safe verification results", async () => {
+  const approved = {
+    ...correction,
+    status: "approved",
+    sync: {
+      can_sync: true,
+      reason: null,
+      status: null,
+      request_fingerprint: "d".repeat(64),
+      verification: null,
+      can_reconcile: false,
+      can_resolve_failure: false,
+    },
+  };
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [approved],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Sync approved correction" }));
+
+  await waitFor(() => expect(apiMocks.syncAdminKycCorrection).toHaveBeenCalledWith({
+    userId: 20,
+    correctionId: 71,
+    action: "sync",
+    token: "admin-token",
+  }));
+  expect(screen.queryByText(/biometric/i)).not.toBeInTheDocument();
+});
+
+it("closes only a backend-authorized deterministic failure with exact attempt evidence", async () => {
+  const failed = {
+    ...correction,
+    status: "sync_failed",
+    sync: {
+      can_sync: false,
+      reason: "Provider rejected the update.",
+      status: "sync_failed",
+      request_id: "a65ec8ad-cd61-4bf4-aea0-6bf93172e75d",
+      request_fingerprint: "d".repeat(64),
+      http_status: 422,
+      failure_code: "provider_rejected",
+      verification: null,
+      can_reconcile: false,
+      can_resolve_failure: true,
+    },
+  };
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [failed],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Close deterministic failure" }));
+  fireEvent.change(screen.getByLabelText("Reason sent to customer"), { target: { value: "Correct the passport surname." } });
+  fireEvent.click(screen.getByRole("button", { name: "Return for new correction" }));
+
+  await waitFor(() => expect(apiMocks.resolveAdminKycCorrectionFailure).toHaveBeenCalledWith({
+    userId: 20,
+    correctionId: 71,
+    requestId: "a65ec8ad-cd61-4bf4-aea0-6bf93172e75d",
+    requestFingerprint: "d".repeat(64),
+    reason: "Correct the passport surname.",
+    token: "admin-token",
+  }));
+});
+
+it("does not offer deterministic recovery for an unknown outcome", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{
+      ...correction,
+      status: "unknown",
+      sync: {
+        can_sync: false,
+        reason: "Outcome requires reconciliation.",
+        status: "unknown",
+        request_id: "a65ec8ad-cd61-4bf4-aea0-6bf93172e75d",
+        request_fingerprint: "d".repeat(64),
+        verification: null,
+        can_reconcile: true,
+        can_resolve_failure: false,
+      },
+    }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(await screen.findByRole("button", { name: "Reconcile with Nium GET" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Close deterministic failure" })).not.toBeInTheDocument();
 });
 
 it("shows a list API error instead of an empty state", async () => {
@@ -493,11 +718,16 @@ it("confirms manual Submit KYC and displays the real Nium biometric URL", async 
   await waitFor(() => expect(apiMocks.requestApi).toHaveBeenNthCalledWith(
     2,
     "/admin/users/20/kyc-profile/submit-kyc",
-    { method: "POST", token: "admin-token" },
+    {
+      method: "POST",
+      token: "admin-token",
+      headers: { "Idempotency-Key": expect.any(String) },
+    },
   ));
   expect(await screen.findByText("nium-reference-123")).toBeInTheDocument();
   expect(screen.getByText("initiated")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Open KYC" })).toHaveAttribute("href", biometricUrl);
+  expect(screen.queryByText(biometricUrl)).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Continue KYC" })).toHaveAttribute("href", biometricUrl);
 });
 
 it("submits manual KYC only once on a rapid confirmation double-click", async () => {
