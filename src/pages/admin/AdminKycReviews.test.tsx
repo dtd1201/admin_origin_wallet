@@ -242,6 +242,9 @@ it("opens a correction document through authenticated Blob preview without a pro
         file_url: "/api/kyc-documents/20/correction-passport-token",
         original_name: "passport.pdf",
         mime_type: "application/pdf",
+        document_number: "P1234567",
+        issuing_country_code: "HK",
+        expires_at: "2099-12-31",
       }],
     }],
     permissions: { approve: true, request_changes: true, sync: true },
@@ -250,7 +253,11 @@ it("opens a correction document through authenticated Blob preview without a pro
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
 
   expect(screen.queryByRole("link", { name: "Review document" })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: "Review document" }));
+  const reviewDocument = await screen.findByRole("button", { name: "Review document" });
+  expect(reviewDocument.parentElement).toHaveTextContent("Passport number: ****4567");
+  expect(reviewDocument.parentElement).toHaveTextContent("Issuing country: HK");
+  expect(reviewDocument.parentElement).toHaveTextContent("Expiry date: 2099-12-31");
+  fireEvent.click(reviewDocument);
 
   await waitFor(() => expect(apiMocks.requestApiBlob).toHaveBeenCalledWith(
     "/api/kyc-documents/20/correction-passport-token",

@@ -1103,7 +1103,26 @@ const AdminKycReviews = () => {
                               ))}
                             </TableBody>
                           </Table>
-                          {activeCorrection.proposed_documents?.length ? <div className="mt-4 space-y-2"><div className="text-sm font-semibold">Submitted documents</div>{activeCorrection.proposed_documents.map((document, index) => <div key={`${document.type}-${index}`} className="flex items-center justify-between rounded-xl bg-white/70 p-3 text-sm"><span>{document.type}: {document.original_name || "Uploaded evidence"}</span>{document.file_url ? <Button type="button" variant="link" className="h-auto p-0 text-cyan-700 underline" onClick={() => void openDocument(document)}>Review document</Button> : null}</div>)}</div> : null}
+                          {activeCorrection.proposed_documents?.length ? (
+                            <div className="mt-4 space-y-2">
+                              <div className="text-sm font-semibold">Submitted documents</div>
+                              {activeCorrection.proposed_documents.map((document, index) => (
+                                <div key={`${document.type}-${index}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/70 p-3 text-sm">
+                                  <div>
+                                    <div>{document.type}: {document.original_name || "Uploaded evidence"}</div>
+                                    {document.type === "passport" ? (
+                                      <div className="mt-1 space-y-1 text-xs text-slate-600">
+                                        <div>Passport number: {document.document_number ? maskSensitiveValue(document.document_number) : "Missing"}</div>
+                                        <div>Issuing country: {document.issuing_country_code || "Missing"}</div>
+                                        <div>Expiry date: {document.expires_at || "Missing"}</div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {document.file_url ? <Button type="button" variant="link" className="h-auto p-0 text-cyan-700 underline" onClick={() => void openDocument(document)}>Review document</Button> : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           {documentError ? <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{documentError}</div> : null}
                           {activeCorrection.review_note ? <div className="mt-3 text-sm text-amber-800">Review note: {activeCorrection.review_note}</div> : null}
                           {activeCorrection.status === "manual_kyc_evidence_approved" ? (
