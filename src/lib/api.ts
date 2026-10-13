@@ -387,3 +387,45 @@ export const requestApi = async <TResponse>(
 
   return (await response.json()) as TResponse;
 };
+
+export const requestApiBlob = async (
+  path: string,
+  {
+    token,
+    accept = "application/octet-stream",
+  }: {
+    token?: string | null;
+    accept?: string | null;
+  } = {},
+): Promise<Blob> => {
+  const url = buildApiUrl(path);
+  if (token && new URL(url).origin !== new URL(apiBaseUrl).origin) {
+    throw new Error("Refusing to send admin credentials to a non-API document origin.");
+  }
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: accept || "application/octet-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Cannot connect to API at ${url}`);
+    }
+
+    throw error;
+  }
+
+  if (!response.ok) {
+    if ((response.status === 401 || response.status === 403) && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(adminUnauthorizedEvent));
+    }
+    throw new ApiRequestError(await getResponseError(response), response.status);
+  }
+
+  return response.blob();
+};

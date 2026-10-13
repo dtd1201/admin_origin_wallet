@@ -443,7 +443,7 @@ export interface AdminKycCorrection {
   proposed_values: AdminKycCorrectionValues;
   requested_fields?: Array<keyof AdminKycCorrectionValues>;
   requested_document_types?: string[];
-  proposed_documents?: Array<{ type: string; file_url?: string | null; file_hash?: string | null; original_name?: string | null }>;
+  proposed_documents?: Array<{ type: string; file_url?: string | null; file_hash?: string | null; original_name?: string | null; mime_type?: string | null }>;
   request_instruction?: string | null;
   request_origin?: string;
   customer_hash_fingerprint: string;

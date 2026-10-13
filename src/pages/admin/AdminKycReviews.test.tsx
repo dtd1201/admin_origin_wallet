@@ -5,6 +5,7 @@ import type { AdminAmlScreening, AdminKycCorrection, AdminKycProfile, AdminKycPr
 
 const apiMocks = vi.hoisted(() => ({
   requestApi: vi.fn(),
+  requestApiBlob: vi.fn(),
   getAdminKycProfile: vi.fn(),
   getAdminKycProviderSubmissions: vi.fn(),
   getAdminAmlScreenings: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/lib/api", () => ({
   adminEndpointConfig: { kycProfiles: "/admin/kyc-profiles" },
   buildApiUrl: (path: string) => `https://api.example.test${path}`,
   requestApi: apiMocks.requestApi,
+  requestApiBlob: apiMocks.requestApiBlob,
   getAdminKycProfile: apiMocks.getAdminKycProfile,
   getAdminKycProviderSubmissions: apiMocks.getAdminKycProviderSubmissions,
   getAdminAmlScreenings: apiMocks.getAdminAmlScreenings,
@@ -159,6 +161,7 @@ const renderPage = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.requestApi.mockResolvedValue(pageResponse);
+  apiMocks.requestApiBlob.mockResolvedValue(new Blob(["passport"], { type: "application/pdf" }));
   apiMocks.getAdminKycProfile.mockResolvedValue({ user: profile.user, kyc_profile: detailProfile, kyc_submission: detailProfile, biometric_kyc: null });
   apiMocks.getAdminKycProviderSubmissions.mockResolvedValue({ user: profile.user, data: [] });
   apiMocks.getAdminAmlScreenings.mockResolvedValue({ ...pageResponse, data: [] });
@@ -169,6 +172,10 @@ beforeEach(() => {
   apiMocks.syncAdminKycCorrection.mockResolvedValue({ message: "Correction synced", correction: { ...correction, status: "synced" } });
   apiMocks.resolveAdminKycCorrectionFailure.mockResolvedValue({ message: "Failure closed", correction: { ...correction, status: "needs_more_info" } });
   apiMocks.requestAdminKycCorrection.mockResolvedValue({ message: "Requested", correction: { ...correction, status: "requested" }, idempotent: false });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 it("creates a scoped applicant field and passport update request", async () => {
@@ -220,6 +227,55 @@ it("shows correction before and after values and approves the exact version", as
     token: "admin-token",
     reason: undefined,
   }));
+});
+
+it("opens a correction document through authenticated Blob preview without a protected URL link", async () => {
+  const createObjectUrl = vi.fn(() => "blob:https://admin.example.test/passport-preview");
+  const open = vi.spyOn(window, "open").mockImplementation(() => null);
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{
+      ...correction,
+      proposed_documents: [{
+        type: "passport",
+        file_url: "/api/kyc-documents/20/correction-passport-token",
+        original_name: "passport.pdf",
+        mime_type: "application/pdf",
+      }],
+    }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+
+  expect(screen.queryByRole("link", { name: "Review document" })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Review document" }));
+
+  await waitFor(() => expect(apiMocks.requestApiBlob).toHaveBeenCalledWith(
+    "/api/kyc-documents/20/correction-passport-token",
+    { token: "admin-token", accept: "application/pdf" },
+  ));
+  expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+  expect(open).toHaveBeenCalledWith("blob:https://admin.example.test/passport-preview", "_blank", "noopener,noreferrer");
+});
+
+it("shows correction document fetch failures without opening a blank tab", async () => {
+  const open = vi.spyOn(window, "open").mockImplementation(() => null);
+  apiMocks.requestApiBlob.mockRejectedValue(new Error("Forbidden"));
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{
+      ...correction,
+      proposed_documents: [{ type: "passport", file_url: "/api/kyc-documents/20/missing", original_name: "passport.png", mime_type: "image/png" }],
+    }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Review document" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
+  expect(open).not.toHaveBeenCalled();
 });
 
 it("shows approved Manual KYC evidence as ready to submit, not waiting for Nium", async () => {

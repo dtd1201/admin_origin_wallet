@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   adminEndpointConfig,
-  buildApiUrl,
   clearAdminAmlScreening,
   confirmAdminAmlMatch,
   getAdminAmlScreenings,
@@ -12,6 +11,7 @@ import {
   getAdminKycCorrections,
   getAdminKycProviderSubmissions,
   requestApi,
+  requestApiBlob,
   reviewAdminKycCorrection,
   resolveAdminKycCorrectionFailure,
   requestAdminKycCorrection,
@@ -493,7 +493,7 @@ const AdminKycReviews = () => {
     [profilesQuery.data?.total, rows],
   );
 
-  const openDocument = async (document: AdminKycDocument) => {
+  const openDocument = async (document: Pick<AdminKycDocument, "file_url" | "mime_type">) => {
     if (!token) {
       setDocumentError("Missing admin session.");
       return;
@@ -502,18 +502,10 @@ const AdminKycReviews = () => {
     setDocumentError("");
 
     try {
-      const response = await fetch(buildApiUrl(document.file_url), {
-        headers: {
-          Accept: document.mime_type || "application/octet-stream",
-          Authorization: `Bearer ${token}`,
-        },
+      const blob = await requestApiBlob(document.file_url, {
+        token,
+        accept: document.mime_type,
       });
-
-      if (!response.ok) {
-        throw new Error(`Unable to open document. Status ${response.status}`);
-      }
-
-      const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       window.open(objectUrl, "_blank", "noopener,noreferrer");
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
@@ -1111,7 +1103,8 @@ const AdminKycReviews = () => {
                               ))}
                             </TableBody>
                           </Table>
-                          {activeCorrection.proposed_documents?.length ? <div className="mt-4 space-y-2"><div className="text-sm font-semibold">Submitted documents</div>{activeCorrection.proposed_documents.map((document, index) => <div key={`${document.type}-${index}`} className="flex items-center justify-between rounded-xl bg-white/70 p-3 text-sm"><span>{document.type}: {document.original_name || "Uploaded evidence"}</span>{document.file_url ? <a className="text-cyan-700 underline" href={buildApiUrl(document.file_url)} target="_blank" rel="noreferrer noopener">Review document</a> : null}</div>)}</div> : null}
+                          {activeCorrection.proposed_documents?.length ? <div className="mt-4 space-y-2"><div className="text-sm font-semibold">Submitted documents</div>{activeCorrection.proposed_documents.map((document, index) => <div key={`${document.type}-${index}`} className="flex items-center justify-between rounded-xl bg-white/70 p-3 text-sm"><span>{document.type}: {document.original_name || "Uploaded evidence"}</span>{document.file_url ? <Button type="button" variant="link" className="h-auto p-0 text-cyan-700 underline" onClick={() => void openDocument(document)}>Review document</Button> : null}</div>)}</div> : null}
+                          {documentError ? <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{documentError}</div> : null}
                           {activeCorrection.review_note ? <div className="mt-3 text-sm text-amber-800">Review note: {activeCorrection.review_note}</div> : null}
                           {activeCorrection.status === "manual_kyc_evidence_approved" ? (
                             <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
