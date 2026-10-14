@@ -493,6 +493,9 @@ export interface AdminCorrectionProofOfAddress {
   file_size?: number | null;
   issued_at?: string | null;
   verified_residence_address?: Record<string, string> | null;
+  customer_provided_residence_address?: Record<string, string> | null;
+  review_feedback?: string | null;
+  upload_origin?: "customer_uploaded" | "admin_uploaded" | string | null;
   nium_file_state?: string | null;
   has_nium_file_id: boolean;
   approved_at?: string | null;

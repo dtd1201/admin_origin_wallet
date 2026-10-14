@@ -18,6 +18,8 @@ import {
   reviewAdminKycCorrection,
   resolveAdminKycCorrectionFailure,
   requestAdminKycCorrection,
+  requestAdminCorrectionProofOfAddress,
+  requestChangesAdminCorrectionProofOfAddress,
   syncAdminKycCorrection,
   uploadAdminCorrectionProofOfAddress,
   type PaginatedResponse,
@@ -340,6 +342,9 @@ const AdminKycReviews = () => {
   const [proofOfAddressCity, setProofOfAddressCity] = useState("");
   const [proofOfAddressPostalCode, setProofOfAddressPostalCode] = useState("");
   const [proofOfAddressCountry, setProofOfAddressCountry] = useState("");
+  const [proofOfAddressInstruction, setProofOfAddressInstruction] = useState("");
+  const [proofOfAddressReviewReason, setProofOfAddressReviewReason] = useState("");
+  const [proofOfAddressIssuer, setProofOfAddressIssuer] = useState("");
   const [resubmissionReason, setResubmissionReason] = useState("");
   const [priorSubmitLogId, setPriorSubmitLogId] = useState("184");
 
@@ -515,6 +520,10 @@ const AdminKycReviews = () => {
       userId: selectedUserId as number,
       correctionId: activeCorrection?.id as number,
       documentId,
+      reason: proofOfAddressReviewReason || undefined,
+      issuer: proofOfAddressIssuer || undefined,
+      issuedAt: proofOfAddressIssuedAt || undefined,
+      address: { address_line1: proofOfAddressLine1, city: proofOfAddressCity, postal_code: proofOfAddressPostalCode, country_code: proofOfAddressCountry },
       token,
     }),
     onSuccess: async (response) => {
@@ -522,6 +531,18 @@ const AdminKycReviews = () => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] });
     },
     onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to approve Proof of Address."),
+  });
+
+  const proofOfAddressRequestMutation = useMutation({
+    mutationFn: () => requestAdminCorrectionProofOfAddress({ userId: selectedUserId as number, correctionId: activeCorrection?.id as number, instruction: proofOfAddressInstruction.trim(), token }),
+    onSuccess: async (response) => { setReviewError(""); setReviewMessage(response.message); await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] }); },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to request Proof of Address."),
+  });
+
+  const proofOfAddressChangesMutation = useMutation({
+    mutationFn: (documentId: number) => requestChangesAdminCorrectionProofOfAddress({ userId: selectedUserId as number, correctionId: activeCorrection?.id as number, documentId, reason: proofOfAddressReviewReason.trim(), token }),
+    onSuccess: async (response) => { setReviewError(""); setReviewMessage(response.message); await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] }); },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to request document changes."),
   });
 
   const resubmissionAuthorizationMutation = useMutation({
@@ -1212,6 +1233,10 @@ const AdminKycReviews = () => {
                               <div>Evidence approved for provider-directed Manual KYC. Proof of Address upload, approval, resubmission authorization and final Submit KYC are separate actions.</div>
                               <div className="rounded-xl border border-amber-200 bg-white p-4">
                                 <div className="font-semibold">Applicant Proof of Address</div>
+                                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                  <div className="md:col-span-2"><Label htmlFor="proof-address-instruction">Customer upload instruction</Label><Input id="proof-address-instruction" value={proofOfAddressInstruction} onChange={(event) => setProofOfAddressInstruction(event.target.value)} /></div>
+                                  <div className="md:col-span-2"><Button type="button" variant="outline" disabled={!proofOfAddressInstruction.trim() || proofOfAddressRequestMutation.isPending} onClick={() => proofOfAddressRequestMutation.mutate()}>Request customer upload</Button></div>
+                                </div>
                                 {activeCorrection.proof_of_address_documents?.length ? (
                                   <div className="mt-3 space-y-2">
                                     {activeCorrection.proof_of_address_documents.map((document) => (
@@ -1225,11 +1250,15 @@ const AdminKycReviews = () => {
                                           <div>Nium File API: {readableStatus(document.nium_file_state || (document.has_nium_file_id ? "file id stored" : "not uploaded"))}</div>
                                           <div>Country: {document.verified_residence_address?.country_code || "Not recorded"}</div>
                                           <div>Approved: {document.approved_at ? formatDate(document.approved_at) : "No"}</div>
+                                          <div>Origin: {readableStatus(document.upload_origin || "admin_uploaded")}</div>
+                                          <div>Customer country: {document.customer_provided_residence_address?.country_code || "Not provided"}</div>
                                         </div>
                                         {document.status === "pending_admin_review" && correctionsQuery.data?.permissions.approve ? (
-                                          <Button className="mt-3" type="button" disabled={proofOfAddressApproveMutation.isPending} onClick={() => proofOfAddressApproveMutation.mutate(document.id)}>
-                                            Approve Proof of Address
-                                          </Button>
+                                          <div className="mt-3 space-y-3">
+                                            <div className="grid gap-3 md:grid-cols-2"><div><Label>Verified issuer</Label><Input value={proofOfAddressIssuer} onChange={(event) => setProofOfAddressIssuer(event.target.value)} /></div><div><Label>Verified issue date</Label><Input type="date" value={proofOfAddressIssuedAt} onChange={(event) => setProofOfAddressIssuedAt(event.target.value)} /></div><div><Label>Verified address line</Label><Input value={proofOfAddressLine1} onChange={(event) => setProofOfAddressLine1(event.target.value)} /></div><div><Label>Verified city</Label><Input value={proofOfAddressCity} onChange={(event) => setProofOfAddressCity(event.target.value)} /></div><div><Label>Verified postal code</Label><Input value={proofOfAddressPostalCode} onChange={(event) => setProofOfAddressPostalCode(event.target.value)} /></div><div><Label>Verified country code</Label><Input maxLength={2} value={proofOfAddressCountry} onChange={(event) => setProofOfAddressCountry(event.target.value.toUpperCase())} /></div><div className="md:col-span-2"><Label>Audit reason / customer feedback</Label><Input value={proofOfAddressReviewReason} onChange={(event) => setProofOfAddressReviewReason(event.target.value)} /></div></div>
+                                            <div className="flex flex-wrap gap-2"><Button type="button" disabled={proofOfAddressApproveMutation.isPending || (document.upload_origin === "customer_uploaded" && (!proofOfAddressReviewReason.trim() || !proofOfAddressLine1.trim() || !proofOfAddressCity.trim() || !proofOfAddressCountry.trim()))} onClick={() => proofOfAddressApproveMutation.mutate(document.id)}>Approve Proof of Address</Button>
+                                            {correctionsQuery.data?.permissions.request_changes ? <Button type="button" variant="outline" disabled={!proofOfAddressReviewReason.trim() || proofOfAddressChangesMutation.isPending} onClick={() => proofOfAddressChangesMutation.mutate(document.id)}>Request document changes</Button> : null}</div>
+                                          </div>
                                         ) : null}
                                       </div>
                                     ))}

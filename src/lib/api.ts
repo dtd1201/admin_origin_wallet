@@ -212,11 +212,27 @@ export const approveAdminCorrectionProofOfAddress = (params: {
   userId: number;
   correctionId: number;
   documentId: number;
+  reason?: string;
+  issuer?: string;
+  issuedAt?: string;
+  address?: Record<string, string>;
   token?: string | null;
 }) => requestApi<{ message: string; document: import("@/types/admin").AdminCorrectionProofOfAddress }>(
   `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/proof-of-address/${params.documentId}/approve`,
-  { method: "POST", token: params.token, body: {} },
+  { method: "POST", token: params.token, body: { reason: params.reason, issuer: params.issuer, issued_at: params.issuedAt, ...(params.address ?? {}) } },
 );
+
+export const requestAdminCorrectionProofOfAddress = (params: { userId: number; correctionId: number; instruction: string; token?: string | null }) =>
+  requestApi<{ message: string; correction: import("@/types/admin").AdminKycCorrection }>(
+    `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/proof-of-address/request`,
+    { method: "POST", token: params.token, body: { instruction: params.instruction } },
+  );
+
+export const requestChangesAdminCorrectionProofOfAddress = (params: { userId: number; correctionId: number; documentId: number; reason: string; token?: string | null }) =>
+  requestApi<{ message: string; document: import("@/types/admin").AdminCorrectionProofOfAddress }>(
+    `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/proof-of-address/${params.documentId}/request-changes`,
+    { method: "POST", token: params.token, body: { reason: params.reason } },
+  );
 
 export const getAdminManualKycResubmissionAuthorization = (userId: number, token?: string | null) =>
   requestApi<{ authorization: import("@/types/admin").AdminManualKycResubmissionAuthorization | null }>(

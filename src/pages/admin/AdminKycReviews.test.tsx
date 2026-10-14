@@ -16,6 +16,8 @@ const apiMocks = vi.hoisted(() => ({
   syncAdminKycCorrection: vi.fn(),
   resolveAdminKycCorrectionFailure: vi.fn(),
   requestAdminKycCorrection: vi.fn(),
+  requestAdminCorrectionProofOfAddress: vi.fn(),
+  requestChangesAdminCorrectionProofOfAddress: vi.fn(),
   uploadAdminCorrectionProofOfAddress: vi.fn(),
   approveAdminCorrectionProofOfAddress: vi.fn(),
   getAdminManualKycResubmissionAuthorization: vi.fn(),
@@ -37,6 +39,8 @@ vi.mock("@/lib/api", () => ({
   syncAdminKycCorrection: apiMocks.syncAdminKycCorrection,
   resolveAdminKycCorrectionFailure: apiMocks.resolveAdminKycCorrectionFailure,
   requestAdminKycCorrection: apiMocks.requestAdminKycCorrection,
+  requestAdminCorrectionProofOfAddress: apiMocks.requestAdminCorrectionProofOfAddress,
+  requestChangesAdminCorrectionProofOfAddress: apiMocks.requestChangesAdminCorrectionProofOfAddress,
   uploadAdminCorrectionProofOfAddress: apiMocks.uploadAdminCorrectionProofOfAddress,
   approveAdminCorrectionProofOfAddress: apiMocks.approveAdminCorrectionProofOfAddress,
   getAdminManualKycResubmissionAuthorization: apiMocks.getAdminManualKycResubmissionAuthorization,
@@ -183,6 +187,8 @@ beforeEach(() => {
   apiMocks.getAdminManualKycResubmissionAuthorization.mockResolvedValue({ authorization: null });
   apiMocks.uploadAdminCorrectionProofOfAddress.mockResolvedValue({ message: "Uploaded", document: { id: 91, type: "proof_of_address", status: "pending_admin_review", file_url: "/document", has_nium_file_id: false } });
   apiMocks.approveAdminCorrectionProofOfAddress.mockResolvedValue({ message: "Approved", document: { id: 91, type: "proof_of_address", status: "approved", file_url: "/document", has_nium_file_id: false } });
+  apiMocks.requestAdminCorrectionProofOfAddress.mockResolvedValue({ message: "Requested", correction });
+  apiMocks.requestChangesAdminCorrectionProofOfAddress.mockResolvedValue({ message: "Changes requested", document: { id: 91, type: "proof_of_address", status: "changes_requested", file_url: "/document", has_nium_file_id: false } });
   apiMocks.authorizeAdminManualKycResubmission.mockResolvedValue({ authorization: { id: 1, state: "pending", correction_id: 71, correction_version: 1, prior_attempt: { state: "rejected", http_status: 400, api_request_log_id: 184 } } });
 });
 
