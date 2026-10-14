@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import AdminKycReviews from "@/pages/admin/AdminKycReviews";
 import type { AdminAmlScreening, AdminKycCorrection, AdminKycProfile, AdminKycProviderSubmission } from "@/types/admin";
 
@@ -165,9 +166,13 @@ const pageResponse = {
   total: 1,
 };
 
-const renderPage = () => {
+const renderPage = (initialEntry = "/admin/kyc-reviews") => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}><AdminKycReviews /></QueryClientProvider>);
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <QueryClientProvider client={queryClient}><AdminKycReviews /></QueryClientProvider>
+    </MemoryRouter>,
+  );
 };
 
 beforeEach(() => {
@@ -194,6 +199,46 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+it("opens the requested customer review from a valid user_id deep link", async () => {
+  renderPage("/admin/kyc-reviews?user_id=20");
+
+  const reviewDialog = await screen.findByRole("dialog", { name: "KYC/KYB review" });
+  expect(await within(reviewDialog).findAllByText("Detail Business Name")).toHaveLength(2);
+  expect(apiMocks.getAdminKycProfile).toHaveBeenCalledWith(20, "admin-token");
+});
+
+it.each([
+  "/admin/kyc-reviews",
+  "/admin/kyc-reviews?user_id=0",
+  "/admin/kyc-reviews?user_id=-1",
+  "/admin/kyc-reviews?user_id=12x",
+])("does not open a review for a missing or invalid deep link: %s", async (initialEntry) => {
+  renderPage(initialEntry);
+
+  await screen.findAllByText("List Business Name");
+  expect(apiMocks.getAdminKycProfile).not.toHaveBeenCalled();
+  expect(screen.queryByText("KYC/KYB review")).not.toBeInTheDocument();
+});
+
+it("keeps manual customer review selection functional", async () => {
+  renderPage();
+
+  fireEvent.click((await screen.findAllByRole("button", { name: /^Review$/ }))[0]);
+
+  const reviewDialog = await screen.findByRole("dialog", { name: "KYC/KYB review" });
+  expect(await within(reviewDialog).findAllByText("Detail Business Name")).toHaveLength(2);
+  expect(apiMocks.getAdminKycProfile).toHaveBeenCalledWith(20, "admin-token");
+});
+
+it("shows the existing safe error state for an unauthorized or nonexistent deep link", async () => {
+  apiMocks.getAdminKycProfile.mockRejectedValueOnce(new Error("KYC profile not found or access denied."));
+
+  renderPage("/admin/kyc-reviews?user_id=999");
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("KYC profile not found or access denied.");
+  expect(apiMocks.getAdminKycProfile).toHaveBeenCalledWith(999, "admin-token");
 });
 
 it("creates a scoped applicant field and passport update request", async () => {

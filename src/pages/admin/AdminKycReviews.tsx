@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, CheckCircle2, ExternalLink, Loader2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   adminEndpointConfig,
@@ -305,6 +306,8 @@ const relatedPersonUpdateTarget = (person: AdminKycRelatedPerson): UpdateRequest
 const AdminKycReviews = () => {
   const { token } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const handledDeepLinkUserIdRef = useRef<number | null>(null);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]["value"]>("all");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -347,6 +350,28 @@ const AdminKycReviews = () => {
   const [proofOfAddressIssuer, setProofOfAddressIssuer] = useState("");
   const [resubmissionReason, setResubmissionReason] = useState("");
   const [priorSubmitLogId, setPriorSubmitLogId] = useState("184");
+
+  const deepLinkUserId = useMemo(() => {
+    const value = searchParams.get("user_id");
+    if (!value || !/^[1-9]\d*$/.test(value)) return null;
+
+    const userId = Number(value);
+    return Number.isSafeInteger(userId) ? userId : null;
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (deepLinkUserId === null) {
+      handledDeepLinkUserIdRef.current = null;
+      return;
+    }
+    if (handledDeepLinkUserIdRef.current === deepLinkUserId) return;
+
+    handledDeepLinkUserIdRef.current = deepLinkUserId;
+    setSelectedUserId(deepLinkUserId);
+    setSelectedProfile(null);
+    setReviewDialogOpen(true);
+  }, [deepLinkUserId, token]);
 
   const queryPath = useMemo(() => {
     const params = new URLSearchParams({ page: String(page) });
