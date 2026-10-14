@@ -453,6 +453,7 @@ export interface AdminKycCorrection {
     issuing_country_code?: string | null;
     expires_at?: string | null;
   }>;
+  proof_of_address_documents?: AdminCorrectionProofOfAddress[];
   request_instruction?: string | null;
   request_origin?: string;
   customer_hash_fingerprint: string;
@@ -480,6 +481,36 @@ export interface AdminKycCorrection {
     can_approve: boolean;
     reason?: string | null;
   };
+}
+
+export interface AdminCorrectionProofOfAddress {
+  id: number;
+  type: "proof_of_address";
+  status: string;
+  file_url: string;
+  original_name?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
+  issued_at?: string | null;
+  verified_residence_address?: Record<string, string> | null;
+  nium_file_state?: string | null;
+  has_nium_file_id: boolean;
+  approved_at?: string | null;
+}
+
+export interface AdminManualKycResubmissionAuthorization {
+  id: number;
+  state: "pending" | "consumed" | "invalidated" | "terminal";
+  outcome_state?: string | null;
+  correction_id: number;
+  correction_version: number;
+  prior_attempt: { state: "rejected"; http_status: 400; api_request_log_id: number };
+  new_api_request_log_id?: number | null;
+  authorized_at?: string | null;
+  consumed_at?: string | null;
+  invalidated_at?: string | null;
+  terminal_at?: string | null;
+  invalidation_code?: string | null;
 }
 
 export interface AdminKycCorrectionListResponse {

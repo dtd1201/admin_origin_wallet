@@ -187,6 +187,56 @@ export const resolveAdminKycCorrectionFailure = (params: {
   },
 );
 
+export const uploadAdminCorrectionProofOfAddress = (params: {
+  userId: number;
+  correctionId: number;
+  file: File;
+  issuedAt?: string;
+  address?: Record<string, string>;
+  token?: string | null;
+}) => {
+  const form = new FormData();
+  form.append("type", "proof_of_address");
+  form.append("file", params.file);
+  if (params.issuedAt) form.append("issued_at", params.issuedAt);
+  Object.entries(params.address ?? {}).forEach(([key, value]) => {
+    if (value.trim()) form.append(key, value.trim());
+  });
+  return requestApi<{ message: string; document: import("@/types/admin").AdminCorrectionProofOfAddress }>(
+    `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/proof-of-address`,
+    { method: "POST", token: params.token, body: form },
+  );
+};
+
+export const approveAdminCorrectionProofOfAddress = (params: {
+  userId: number;
+  correctionId: number;
+  documentId: number;
+  token?: string | null;
+}) => requestApi<{ message: string; document: import("@/types/admin").AdminCorrectionProofOfAddress }>(
+  `/admin/users/${params.userId}/kyc-profile/corrections/${params.correctionId}/proof-of-address/${params.documentId}/approve`,
+  { method: "POST", token: params.token, body: {} },
+);
+
+export const getAdminManualKycResubmissionAuthorization = (userId: number, token?: string | null) =>
+  requestApi<{ authorization: import("@/types/admin").AdminManualKycResubmissionAuthorization | null }>(
+    `/admin/users/${userId}/kyc-profile/manual-kyc-resubmission-authorization`,
+    { method: "GET", token },
+  );
+
+export const authorizeAdminManualKycResubmission = (params: {
+  userId: number;
+  priorApiRequestLogId: number;
+  reason: string;
+  token?: string | null;
+}) => requestApi<{ authorization: import("@/types/admin").AdminManualKycResubmissionAuthorization }>(
+  `/admin/users/${params.userId}/kyc-profile/manual-kyc-resubmission-authorizations`,
+  { method: "POST", token: params.token, body: {
+    prior_api_request_log_id: params.priorApiRequestLogId,
+    reason: params.reason,
+  } },
+);
+
 export const getAdminProviderAccountSubmissions = (page: number, token?: string | null) =>
   requestApi<PaginatedResponse<AdminKycProviderSubmission>>(
     `${adminEndpointConfig.kycProviderSubmissions}?page=${page}`,
@@ -347,7 +397,7 @@ export const requestApi = async <TResponse>(
     headers,
   }: {
     method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-    body?: Record<string, unknown>;
+    body?: Record<string, unknown> | FormData;
     token?: string | null;
     headers?: Record<string, string>;
   } = {},
@@ -360,11 +410,11 @@ export const requestApi = async <TResponse>(
       method,
       headers: {
         Accept: "application/json",
-        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(body && !(body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(body ? { body: body instanceof FormData ? body : JSON.stringify(body) } : {}),
     });
   } catch (error) {
     if (error instanceof TypeError) {

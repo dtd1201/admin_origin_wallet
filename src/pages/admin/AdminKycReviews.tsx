@@ -4,18 +4,22 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   adminEndpointConfig,
+  approveAdminCorrectionProofOfAddress,
+  authorizeAdminManualKycResubmission,
   clearAdminAmlScreening,
   confirmAdminAmlMatch,
   getAdminAmlScreenings,
   getAdminKycProfile,
   getAdminKycCorrections,
   getAdminKycProviderSubmissions,
+  getAdminManualKycResubmissionAuthorization,
   requestApi,
   requestApiBlob,
   reviewAdminKycCorrection,
   resolveAdminKycCorrectionFailure,
   requestAdminKycCorrection,
   syncAdminKycCorrection,
+  uploadAdminCorrectionProofOfAddress,
   type PaginatedResponse,
 } from "@/lib/api";
 import type {
@@ -50,6 +54,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 
 const statusOptions = [
   { value: "all", label: "All statuses" },
@@ -329,6 +334,14 @@ const AdminKycReviews = () => {
   const [scopedRequestFields, setScopedRequestFields] = useState<string[]>([]);
   const [scopedRequestPassport, setScopedRequestPassport] = useState(false);
   const [scopedRequestInstruction, setScopedRequestInstruction] = useState("");
+  const [proofOfAddressFile, setProofOfAddressFile] = useState<File | null>(null);
+  const [proofOfAddressIssuedAt, setProofOfAddressIssuedAt] = useState("");
+  const [proofOfAddressLine1, setProofOfAddressLine1] = useState("");
+  const [proofOfAddressCity, setProofOfAddressCity] = useState("");
+  const [proofOfAddressPostalCode, setProofOfAddressPostalCode] = useState("");
+  const [proofOfAddressCountry, setProofOfAddressCountry] = useState("");
+  const [resubmissionReason, setResubmissionReason] = useState("");
+  const [priorSubmitLogId, setPriorSubmitLogId] = useState("184");
 
   const queryPath = useMemo(() => {
     const params = new URLSearchParams({ page: String(page) });
@@ -365,6 +378,12 @@ const AdminKycReviews = () => {
     ),
   });
 
+  const resubmissionAuthorizationQuery = useQuery({
+    queryKey: ["admin", "manual-kyc-resubmission-authorization", selectedUserId, token],
+    enabled: !!token && reviewDialogOpen && selectedUserId !== null,
+    queryFn: () => getAdminManualKycResubmissionAuthorization(selectedUserId as number, token),
+  });
+
   const amlScreeningsQuery = useQuery({
     queryKey: ["admin", "aml-screenings", selectedUserId, token],
     enabled: !!token && reviewDialogOpen && selectedUserId !== null,
@@ -399,6 +418,13 @@ const AdminKycReviews = () => {
     setFailureResolutionOpen(false);
     setFailureResolutionReason("");
     setCorrectionStatusFilter("all");
+    setProofOfAddressFile(null);
+    setProofOfAddressIssuedAt("");
+    setProofOfAddressLine1("");
+    setProofOfAddressCity("");
+    setProofOfAddressPostalCode("");
+    setProofOfAddressCountry("");
+    setResubmissionReason("");
   }, [selectedProfile?.id]);
 
   const activeCorrection = correctionsQuery.data?.data.find((correction) => correction.status === "submitted")
@@ -460,6 +486,58 @@ const AdminKycReviews = () => {
     onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to synchronize the KYC correction."),
   });
 
+  const proofOfAddressUploadMutation = useMutation({
+    mutationFn: () => {
+      if (!activeCorrection || !proofOfAddressFile) throw new Error("Select a Proof of Address file.");
+      return uploadAdminCorrectionProofOfAddress({
+        userId: selectedUserId as number,
+        correctionId: activeCorrection.id,
+        file: proofOfAddressFile,
+        issuedAt: proofOfAddressIssuedAt || undefined,
+        address: {
+          address_line1: proofOfAddressLine1,
+          city: proofOfAddressCity,
+          postal_code: proofOfAddressPostalCode,
+          country_code: proofOfAddressCountry,
+        },
+        token,
+      });
+    },
+    onSuccess: async (response) => {
+      setReviewError(""); setReviewMessage(response.message); setProofOfAddressFile(null);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to upload Proof of Address."),
+  });
+
+  const proofOfAddressApproveMutation = useMutation({
+    mutationFn: (documentId: number) => approveAdminCorrectionProofOfAddress({
+      userId: selectedUserId as number,
+      correctionId: activeCorrection?.id as number,
+      documentId,
+      token,
+    }),
+    onSuccess: async (response) => {
+      setReviewError(""); setReviewMessage(response.message);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to approve Proof of Address."),
+  });
+
+  const resubmissionAuthorizationMutation = useMutation({
+    mutationFn: () => authorizeAdminManualKycResubmission({
+      userId: selectedUserId as number,
+      priorApiRequestLogId: Number(priorSubmitLogId),
+      reason: resubmissionReason.trim(),
+      token,
+    }),
+    onSuccess: async () => {
+      setReviewError(""); setReviewMessage("Manual KYC resubmission authorized. Final Submit KYC remains a separate action.");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "manual-kyc-resubmission-authorization", selectedUserId] });
+    },
+    onError: (error) => setReviewError(error instanceof Error ? error.message : "Unable to authorize Manual KYC resubmission."),
+  });
+
   const failureResolutionMutation = useMutation({
     mutationFn: ({ correction, reason }: { correction: AdminKycCorrection; reason: string }) => {
       if (!correction.sync?.request_id || !correction.sync.request_fingerprint) {
@@ -493,7 +571,7 @@ const AdminKycReviews = () => {
     [profilesQuery.data?.total, rows],
   );
 
-  const openDocument = async (document: Pick<AdminKycDocument, "file_url" | "mime_type">) => {
+  const openDocument = async (document: { file_url: string; mime_type?: string | null }) => {
     if (!token) {
       setDocumentError("Missing admin session.");
       return;
@@ -558,10 +636,14 @@ const AdminKycReviews = () => {
         token,
         headers: { "Idempotency-Key": idempotencyKey },
       }),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       setSubmitKycResult(response);
       setSubmitKycDialogOpen(false);
       setReviewError("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "kyc-corrections", selectedUserId] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "manual-kyc-resubmission-authorization", selectedUserId] }),
+      ]);
     },
     onError: (error) => {
       setSubmitKycResult(null);
@@ -1126,13 +1208,73 @@ const AdminKycReviews = () => {
                           {documentError ? <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{documentError}</div> : null}
                           {activeCorrection.review_note ? <div className="mt-3 text-sm text-amber-800">Review note: {activeCorrection.review_note}</div> : null}
                           {activeCorrection.status === "manual_kyc_evidence_approved" ? (
-                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                              Evidence approved for provider-directed Manual KYC. Use the existing Submit KYC action, then notify Su for Nium Compliance review. This does not update Customer identity fields.
+                            <div className="mt-3 space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                              <div>Evidence approved for provider-directed Manual KYC. Proof of Address upload, approval, resubmission authorization and final Submit KYC are separate actions.</div>
+                              <div className="rounded-xl border border-amber-200 bg-white p-4">
+                                <div className="font-semibold">Applicant Proof of Address</div>
+                                {activeCorrection.proof_of_address_documents?.length ? (
+                                  <div className="mt-3 space-y-2">
+                                    {activeCorrection.proof_of_address_documents.map((document) => (
+                                      <div key={document.id} className="rounded-lg border border-slate-200 p-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div><span className="font-medium">{document.original_name || `Document ${document.id}`}</span> · {readableStatus(document.status)}</div>
+                                          <Button type="button" variant="link" onClick={() => void openDocument(document)}>Review document</Button>
+                                        </div>
+                                        <div className="mt-2 grid gap-1 text-xs text-slate-600 md:grid-cols-2">
+                                          <div>Issue date: {document.issued_at || "Not recorded"}</div>
+                                          <div>Nium File API: {readableStatus(document.nium_file_state || (document.has_nium_file_id ? "file id stored" : "not uploaded"))}</div>
+                                          <div>Country: {document.verified_residence_address?.country_code || "Not recorded"}</div>
+                                          <div>Approved: {document.approved_at ? formatDate(document.approved_at) : "No"}</div>
+                                        </div>
+                                        {document.status === "pending_admin_review" && correctionsQuery.data?.permissions.approve ? (
+                                          <Button className="mt-3" type="button" disabled={proofOfAddressApproveMutation.isPending} onClick={() => proofOfAddressApproveMutation.mutate(document.id)}>
+                                            Approve Proof of Address
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : correctionsQuery.data?.permissions.approve ? (
+                                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                    <div className="md:col-span-2"><Label htmlFor="proof-address-file">PDF, JPG or PNG (maximum 20 MB)</Label><Input id="proof-address-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => setProofOfAddressFile(event.target.files?.[0] ?? null)} /></div>
+                                    <div><Label htmlFor="proof-address-issued">Actual issue date, if shown</Label><Input id="proof-address-issued" type="date" value={proofOfAddressIssuedAt} onChange={(event) => setProofOfAddressIssuedAt(event.target.value)} /></div>
+                                    <div><Label htmlFor="proof-address-country">Verified residence country</Label><Input id="proof-address-country" maxLength={2} value={proofOfAddressCountry} onChange={(event) => setProofOfAddressCountry(event.target.value.toUpperCase())} /></div>
+                                    <div><Label htmlFor="proof-address-line1">Verified address line, if available</Label><Input id="proof-address-line1" value={proofOfAddressLine1} onChange={(event) => setProofOfAddressLine1(event.target.value)} /></div>
+                                    <div><Label htmlFor="proof-address-city">City, if available</Label><Input id="proof-address-city" value={proofOfAddressCity} onChange={(event) => setProofOfAddressCity(event.target.value)} /></div>
+                                    <div><Label htmlFor="proof-address-postal">Postal code, if available</Label><Input id="proof-address-postal" value={proofOfAddressPostalCode} onChange={(event) => setProofOfAddressPostalCode(event.target.value)} /></div>
+                                    <div className="flex items-end"><Button type="button" disabled={!proofOfAddressFile || proofOfAddressUploadMutation.isPending} onClick={() => proofOfAddressUploadMutation.mutate()}>{proofOfAddressUploadMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Upload for review</Button></div>
+                                  </div>
+                                ) : <div className="mt-2 text-slate-600">No Proof of Address is attached.</div>}
+                              </div>
+                              <div className="rounded-xl border border-amber-200 bg-white p-4">
+                                <div className="font-semibold">Manual KYC resubmission authorization</div>
+                                {resubmissionAuthorizationQuery.data?.authorization ? (
+                                  <div className="mt-2 space-y-1 text-sm">
+                                    <div>State: {readableStatus(resubmissionAuthorizationQuery.data.authorization.state)}</div>
+                                    <div>Outcome: {readableStatus(resubmissionAuthorizationQuery.data.authorization.outcome_state)}</div>
+                                    <div>Prior attempt: rejected HTTP 400, log #{resubmissionAuthorizationQuery.data.authorization.prior_attempt.api_request_log_id}</div>
+                                  </div>
+                                ) : correctionsQuery.data?.permissions.approve
+                                  && activeCorrection.proof_of_address_documents?.some((document) => document.status === "approved") ? (
+                                  <div className="mt-3 grid gap-3">
+                                    <div><Label htmlFor="prior-submit-log">Rejected Submit KYC log ID</Label><Input id="prior-submit-log" inputMode="numeric" value={priorSubmitLogId} onChange={(event) => setPriorSubmitLogId(event.target.value)} /></div>
+                                    <div><Label htmlFor="resubmission-reason">Authorization reason</Label><Textarea id="resubmission-reason" value={resubmissionReason} onChange={(event) => setResubmissionReason(event.target.value)} /></div>
+                                    <Button type="button" className="w-fit" disabled={!resubmissionReason.trim() || !Number.isInteger(Number(priorSubmitLogId)) || resubmissionAuthorizationMutation.isPending} onClick={() => resubmissionAuthorizationMutation.mutate()}>Authorize one resubmission</Button>
+                                  </div>
+                                ) : <div className="mt-2 text-slate-600">
+                                  {correctionsQuery.data?.permissions.approve
+                                    ? "Approve the correction-bound Proof of Address before authorizing resubmission."
+                                    : "No resubmission authorization exists."}
+                                </div>}
+                              </div>
                             </div>
                           ) : null}
                           {activeCorrection.status === "manual_kyc_compliance_review" ? (
                             <div className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-950">
                               Waiting for Nium Compliance review. Notify Su for provider review. Customer identity fields have not been updated by this submission.
+                              {resubmissionAuthorizationQuery.data?.authorization ? (
+                                <div className="mt-2">Resubmission authorization: {readableStatus(resubmissionAuthorizationQuery.data.authorization.state)} · Outcome: {readableStatus(resubmissionAuthorizationQuery.data.authorization.outcome_state)}</div>
+                              ) : null}
                             </div>
                           ) : null}
                           {activeCorrection.sync ? (

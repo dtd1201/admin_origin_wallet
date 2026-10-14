@@ -16,6 +16,10 @@ const apiMocks = vi.hoisted(() => ({
   syncAdminKycCorrection: vi.fn(),
   resolveAdminKycCorrectionFailure: vi.fn(),
   requestAdminKycCorrection: vi.fn(),
+  uploadAdminCorrectionProofOfAddress: vi.fn(),
+  approveAdminCorrectionProofOfAddress: vi.fn(),
+  getAdminManualKycResubmissionAuthorization: vi.fn(),
+  authorizeAdminManualKycResubmission: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -33,6 +37,10 @@ vi.mock("@/lib/api", () => ({
   syncAdminKycCorrection: apiMocks.syncAdminKycCorrection,
   resolveAdminKycCorrectionFailure: apiMocks.resolveAdminKycCorrectionFailure,
   requestAdminKycCorrection: apiMocks.requestAdminKycCorrection,
+  uploadAdminCorrectionProofOfAddress: apiMocks.uploadAdminCorrectionProofOfAddress,
+  approveAdminCorrectionProofOfAddress: apiMocks.approveAdminCorrectionProofOfAddress,
+  getAdminManualKycResubmissionAuthorization: apiMocks.getAdminManualKycResubmissionAuthorization,
+  authorizeAdminManualKycResubmission: apiMocks.authorizeAdminManualKycResubmission,
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: "admin-token" }) }));
@@ -172,6 +180,10 @@ beforeEach(() => {
   apiMocks.syncAdminKycCorrection.mockResolvedValue({ message: "Correction synced", correction: { ...correction, status: "synced" } });
   apiMocks.resolveAdminKycCorrectionFailure.mockResolvedValue({ message: "Failure closed", correction: { ...correction, status: "needs_more_info" } });
   apiMocks.requestAdminKycCorrection.mockResolvedValue({ message: "Requested", correction: { ...correction, status: "requested" }, idempotent: false });
+  apiMocks.getAdminManualKycResubmissionAuthorization.mockResolvedValue({ authorization: null });
+  apiMocks.uploadAdminCorrectionProofOfAddress.mockResolvedValue({ message: "Uploaded", document: { id: 91, type: "proof_of_address", status: "pending_admin_review", file_url: "/document", has_nium_file_id: false } });
+  apiMocks.approveAdminCorrectionProofOfAddress.mockResolvedValue({ message: "Approved", document: { id: 91, type: "proof_of_address", status: "approved", file_url: "/document", has_nium_file_id: false } });
+  apiMocks.authorizeAdminManualKycResubmission.mockResolvedValue({ authorization: { id: 1, state: "pending", correction_id: 71, correction_version: 1, prior_attempt: { state: "rejected", http_status: 400, api_request_log_id: 184 } } });
 });
 
 afterEach(() => {
@@ -295,6 +307,41 @@ it("shows approved Manual KYC evidence as ready to submit, not waiting for Nium"
 
   expect(await screen.findByText(/evidence approved for provider-directed manual kyc/i)).toBeVisible();
   expect(screen.queryByText(/waiting for nium compliance review/i)).not.toBeInTheDocument();
+});
+
+it("uploads Proof of Address for review without authorizing or submitting KYC", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{ ...correction, status: "manual_kyc_evidence_approved", proof_of_address_documents: [] }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  const file = new File(["address"], "address.pdf", { type: "application/pdf" });
+  fireEvent.change(await screen.findByLabelText(/PDF, JPG or PNG/i), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText(/Verified residence country/i), { target: { value: "VN" } });
+  fireEvent.click(screen.getByRole("button", { name: "Upload for review" }));
+
+  await waitFor(() => expect(apiMocks.uploadAdminCorrectionProofOfAddress).toHaveBeenCalledWith(expect.objectContaining({
+    userId: 20, correctionId: 71, file, address: expect.objectContaining({ country_code: "VN" }),
+  })));
+  expect(apiMocks.authorizeAdminManualKycResubmission).not.toHaveBeenCalled();
+  expect(apiMocks.requestApi.mock.calls.some(([path]) => path === "/admin/users/20/kyc-profile/submit-kyc")).toBe(false);
+});
+
+it("shows pending Proof of Address approval and resubmission authorization as separate actions", async () => {
+  apiMocks.getAdminKycCorrections.mockResolvedValue({
+    data: [{
+      ...correction,
+      status: "manual_kyc_evidence_approved",
+      proof_of_address_documents: [{ id: 91, type: "proof_of_address", status: "pending_admin_review", file_url: "/document", original_name: "address.pdf", has_nium_file_id: false }],
+    }],
+    permissions: { approve: true, request_changes: true, sync: true },
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve Proof of Address" }));
+  await waitFor(() => expect(apiMocks.approveAdminCorrectionProofOfAddress).toHaveBeenCalledWith(expect.objectContaining({ documentId: 91 })));
+  expect(apiMocks.authorizeAdminManualKycResubmission).not.toHaveBeenCalled();
 });
 
 it("shows waiting for Nium Compliance only after an accepted Manual KYC submission", async () => {
