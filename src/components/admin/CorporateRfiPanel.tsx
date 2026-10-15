@@ -1,75 +1,78 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Check, ChevronRight, FileCheck2, FileText, History, Loader2, MessageSquareText, RefreshCw, Search, Send, ShieldAlert, UserRoundCheck } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { approveAdminRfiUserSubmission, getAdminRfiCase, getAdminRfiCases, requestAdminRfiRevision, requestApiBlob, sendAdminRfiToUser } from "@/lib/api";
 import type { AdminRfiCase } from "@/types/admin";
 
-const fields = (item: AdminRfiCase) => {
-  const template = item.evidence?.template;
-  if (!template || typeof template !== "object") return [];
-  const value = (template as Record<string, unknown>).requiredFields;
-  return Array.isArray(value) ? value as Array<Record<string, unknown>> : [];
-};
+type Filter = "all" | "needs_action" | "with_customer" | "complete";
+const steps = [["Received", FileText], ["Sent to Customer", Send], ["Customer Submitted", UserRoundCheck], ["Admin Reviewed", FileCheck2], ["Provider Submission", Check]] as const;
+const stepByState: Record<string, number> = { new: 0, sent_to_user: 1, user_draft: 1, revision_requested: 1, user_submitted: 2, admin_review: 2, admin_approved: 3, nium_submission_pending: 3, nium_submitted: 4, nium_submission_failed: 3 };
+const labels: Record<string, string> = { new: "Ready to send", sent_to_user: "Waiting for customer", user_draft: "Customer drafting", user_submitted: "Ready for review", admin_review: "In admin review", revision_requested: "Revision requested", admin_approved: "Admin approved", nium_submission_pending: "Provider submission pending", nium_submitted: "Submitted to provider", nium_submission_failed: "Provider submission failed" };
+const formatDate = (value?: string | null) => { if (!value) return "Not available"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "Not available" : new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date); };
+const template = (item: AdminRfiCase) => item.evidence?.template && typeof item.evidence.template === "object" ? item.evidence.template as Record<string, unknown> : undefined;
+const name = (item: AdminRfiCase) => String(template(item)?.name || template(item)?.documentType || `RFI request ${item.id}`);
+const remarks = (item: AdminRfiCase) => typeof item.evidence?.remarks === "string" ? item.evidence.remarks : "";
+const fields = (item: AdminRfiCase) => Array.isArray(template(item)?.requiredFields) ? template(item)?.requiredFields as Array<Record<string, unknown>> : [];
+const isActionable = (item: AdminRfiCase) => ["new", "revision_requested", "user_submitted", "admin_review"].includes(item.submission_state);
 
-export const CorporateRfiPanel = ({ userId, token }: { userId: number; token?: string | null }) => {
+export const CorporateRfiPanel = ({ userId, token, customerName }: { userId: number; token?: string | null; customerName?: string | null }) => {
   const client = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [revision, setRevision] = useState<Record<number, string>>({});
   const [actionError, setActionError] = useState("");
-  const query = useQuery({
-    queryKey: ["admin", "customer-rfis", userId, token],
-    enabled: !!token,
-    queryFn: async () => {
-      const page = await getAdminRfiCases(`scope=customer&user_id=${userId}&per_page=50`, token);
-      return { ...page, data: await Promise.all(page.data.map((item) => getAdminRfiCase(item.id, token))) };
-    },
-  });
-  const mutate = useMutation({
-    mutationFn: ({ action, item }: { action: "send" | "approve" | "revision"; item: AdminRfiCase }) => action === "send"
-      ? sendAdminRfiToUser(item.id, token)
-      : action === "approve"
-        ? approveAdminRfiUserSubmission(item.id, token)
-        : requestAdminRfiRevision(item.id, revision[item.id] || "", token),
-    onSuccess: () => {
-      setActionError("");
-      return client.invalidateQueries({ queryKey: ["admin", "customer-rfis", userId] });
-    },
+  const query = useQuery({ queryKey: ["admin", "customer-rfis", userId, token], enabled: !!token, queryFn: async () => { const page = await getAdminRfiCases(`scope=customer&user_id=${userId}&per_page=50`, token); return { ...page, data: await Promise.all(page.data.map((item) => getAdminRfiCase(item.id, token))) }; } });
+  const mutation = useMutation({
+    mutationFn: ({ action, item }: { action: "send" | "approve" | "revision"; item: AdminRfiCase }) => action === "send" ? sendAdminRfiToUser(item.id, token) : action === "approve" ? approveAdminRfiUserSubmission(item.id, token) : requestAdminRfiRevision(item.id, revision[item.id] || "", token),
+    onSuccess: () => { setActionError(""); return client.invalidateQueries({ queryKey: ["admin", "customer-rfis", userId] }); },
     onError: (error) => setActionError(error instanceof Error ? error.message : "Unable to update the Corporate RFI request."),
   });
-  const items = query.data?.data.filter((item) => item.origin === "authoritative_fetch") ?? [];
-  const reviewDocument = async (url?: string | null) => {
-    if (!url) return;
-    try {
-      const blob = await requestApiBlob(url, { token });
-      const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      setActionError("");
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to review the Corporate RFI document.");
-    }
-  };
+  const authoritative = useMemo(() => query.data?.data.filter((item) => item.origin === "authoritative_fetch") ?? [], [query.data]);
+  const historical = useMemo(() => query.data?.data.filter((item) => item.origin !== "authoritative_fetch") ?? [], [query.data]);
+  const filtered = useMemo(() => authoritative.filter((item) => {
+    const haystack = `${name(item)} ${remarks(item)} ${labels[item.submission_state] || item.submission_state}`.toLowerCase();
+    const stateMatch = filter === "all" || filter === "needs_action" && isActionable(item) || filter === "with_customer" && ["sent_to_user", "user_draft", "revision_requested"].includes(item.submission_state) || filter === "complete" && ["admin_approved", "nium_submitted"].includes(item.submission_state);
+    return haystack.includes(search.trim().toLowerCase()) && stateMatch;
+  }), [authoritative, filter, search]);
+  const selected = authoritative.find((item) => item.id === selectedId) ?? null;
+  const latest = authoritative.map((item) => item.updated_at).filter(Boolean).sort().at(-1);
+  const reviewDocument = async (url?: string | null) => { if (!url) return; try { const blob = await requestApiBlob(url, { token }); const objectUrl = URL.createObjectURL(blob); window.open(objectUrl, "_blank", "noopener,noreferrer"); window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000); setActionError(""); } catch (error) { setActionError(error instanceof Error ? error.message : "Unable to review the Corporate RFI document."); } };
+  if (!token) return <State role="alert" title="Permission required" text="You do not have an active Admin session for Corporate RFI access." />;
 
-  return <div className="space-y-4">
-    <div className="flex items-center justify-between"><div><div className="font-semibold text-slate-950">Corporate RFI</div><div className="text-sm text-slate-500">{items.filter((item) => item.status === "requested").length} open Nium request(s)</div></div></div>
-    {query.isLoading ? <div className="text-sm text-slate-500">Loading Corporate RFI requests...</div> : null}
-    {query.isError ? <div role="alert" className="text-sm text-red-700">Unable to load Corporate RFI requests.</div> : null}
-    {actionError ? <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{actionError}</div> : null}
-    {items.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold">{String((item.evidence?.template as Record<string, unknown> | undefined)?.name || `RFI #${item.id}`)}</div><div className="flex gap-2"><Badge>{item.status}</Badge><Badge variant="outline">{item.submission_state}</Badge></div></div>
-      <div className="mt-3 whitespace-pre-wrap rounded-xl bg-amber-50 p-3 text-sm text-slate-800">{String(item.evidence?.remarks || "No provider remarks supplied.")}</div>
-      <div className="mt-3 space-y-1 text-sm">{fields(item).map((field, index) => <div key={index}><span className="font-medium">{String(field.fieldLabel || "Required document")}</span> · {String(field.type || field.fieldValue || "document")}</div>)}</div>
-      {item.user_explanation ? <div className="mt-3 text-sm"><span className="font-medium">Customer explanation:</span> {item.user_explanation}</div> : null}
-      {item.documents?.length ? <div className="mt-3 space-y-1 text-sm">{item.documents.map((document) => <Button key={document.id} type="button" variant="link" className="block h-auto p-0 text-emerald-700" onClick={() => reviewDocument(document.file_url)}>{document.original_name || `Document ${document.id}`}</Button>)}</div> : null}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {(["new", "revision_requested"] as string[]).includes(item.submission_state) ? <Button size="sm" onClick={() => mutate.mutate({ action: "send", item })}>Send RFI Request to User</Button> : null}
-        {(["user_submitted", "admin_review"] as string[]).includes(item.submission_state) ? <Button size="sm" onClick={() => mutate.mutate({ action: "approve", item })}>Approve Documents</Button> : null}
-      </div>
-      {(["user_submitted", "admin_review"] as string[]).includes(item.submission_state) ? <div className="mt-3 flex gap-2"><Textarea aria-label={`Revision reason ${item.id}`} value={revision[item.id] || ""} onChange={(event) => setRevision((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Explain required corrections" /><Button variant="outline" disabled={!revision[item.id]?.trim()} onClick={() => mutate.mutate({ action: "revision", item })}>Request Revision</Button></div> : null}
-      {item.history?.length ? <details className="mt-3 text-sm"><summary className="cursor-pointer font-medium">View Submission History</summary><div className="mt-2 space-y-1">{item.history.map((event, index) => <div key={index}>{event.event_type}: {event.from_state || "-"} → {event.to_state || "-"}</div>)}</div></details> : null}
-      <div className="mt-3 text-xs text-slate-500">Submission to Nium: blocked ({item.contract_gate})</div>
-    </div>)}
-    {!query.isLoading && !items.length ? <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">No authoritative Corporate RFI requests.</div> : null}
-  </div>;
+  return <section aria-labelledby="corporate-rfi-title" className="space-y-5">
+    <header className="overflow-hidden rounded-[1.75rem] bg-slate-950 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)] sm:p-8"><div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300"><MessageSquareText className="h-4 w-4" />Compliance workspace</div><h2 id="corporate-rfi-title" className="text-2xl font-semibold sm:text-3xl">Corporate RFI management</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Coordinate Nium requests for <span className="font-medium text-white">{customerName || "this corporate customer"}</span>. Customer and provider submissions remain separate.</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[500px]"><Metric label="Provider" value="Nium" /><Metric label="Active RFIs" value={String(authoritative.length)} /><Metric label="Needs action" value={String(authoritative.filter(isActionable).length)} accent /><Metric label="Latest update" value={latest ? formatDate(latest).split(",")[0] : "Not available"} /></div></div></header>
+    {query.isLoading ? <Loading /> : null}
+    {query.isError ? <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-800 sm:flex-row sm:items-center sm:justify-between"><div><div className="font-semibold">Unable to load Corporate RFI requests.</div><div className="mt-1 text-sm">The latest provider requests could not be retrieved.</div></div><Button variant="outline" onClick={() => query.refetch()}><RefreshCw className="h-4 w-4" />Retry</Button></div> : null}
+    {actionError ? <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{actionError}</div> : null}
+    {!query.isLoading && !query.isError ? <>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col gap-3 md:flex-row"><div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input aria-label="Search Corporate RFI requests" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search template, remarks or status" className="pl-9" /></div><Select value={filter} onValueChange={(value) => setFilter(value as Filter)}><SelectTrigger aria-label="Filter Corporate RFI requests" className="w-full md:w-56"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All requests</SelectItem><SelectItem value="needs_action">Needs Admin action</SelectItem><SelectItem value="with_customer">With customer</SelectItem><SelectItem value="complete">Admin reviewed</SelectItem></SelectContent></Select></div></div>
+      {authoritative.length ? <div aria-label="Authoritative Corporate RFI requests" className="grid gap-3 xl:grid-cols-2">{filtered.map((item) => <RequestCard key={item.id} item={item} inspect={() => setSelectedId(item.id)} act={() => mutation.mutate({ action: ["new", "revision_requested"].includes(item.submission_state) ? "send" : "approve", item })} pending={mutation.isPending} />)}</div> : <Empty />}
+      {authoritative.length > 0 && filtered.length === 0 ? <State title="No matching requests" text="Try a different search or operational filter." /> : null}
+      {historical.length ? <section aria-labelledby="historical-rfi-title" className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><div className="flex gap-3"><History className="mt-0.5 h-5 w-5 text-slate-500" /><div><h3 id="historical-rfi-title" className="font-semibold text-slate-900">Historical webhook evidence</h3><p className="mt-1 text-sm text-slate-600">Audit context only. These records are not authoritative provider requests and cannot be actioned.</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2">{historical.map((item) => <div key={item.id} className="rounded-xl border bg-white p-4"><div className="font-medium">{name(item)}</div><div className="mt-1 text-xs text-slate-500">Evidence record {item.id} · {formatDate(item.updated_at)}</div></div>)}</div></section> : null}
+    </> : null}
+    <Sheet open={!!selected} onOpenChange={(open) => !open && setSelectedId(null)}><SheetContent className="w-full overflow-y-auto p-0 sm:max-w-3xl lg:max-w-5xl"><SheetHeader className="sticky top-0 z-10 border-b bg-white/95 px-5 py-5 text-left backdrop-blur sm:px-8"><SheetTitle className="pr-8 text-xl sm:text-2xl">{selected ? name(selected) : "Corporate RFI"}</SheetTitle><SheetDescription>Nium request inspection and Origin Wallet review workflow</SheetDescription></SheetHeader>{selected ? <Detail item={selected} revision={revision[selected.id] || ""} setRevision={(value) => setRevision((current) => ({ ...current, [selected.id]: value }))} act={(action) => mutation.mutate({ action, item: selected })} pending={mutation.isPending} reviewDocument={reviewDocument} /> : null}</SheetContent></Sheet>
+  </section>;
 };
+
+const RequestCard = ({ item, inspect, act, pending }: { item: AdminRfiCase; inspect: () => void; act: () => void; pending: boolean }) => <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Nium request</div><h3 className="mt-1 line-clamp-2 text-lg font-semibold">{name(item)}</h3></div><Badge variant="outline" className="shrink-0">{labels[item.submission_state] || "Status unavailable"}</Badge></div><p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-600">{remarks(item) || "No additional provider remarks were supplied."}</p><div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>{fields(item).length} required item(s)</span><span>{item.documents?.length || 0} attached document(s)</span><span>Updated {formatDate(item.updated_at)}</span></div><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between"><Button variant="ghost" className="justify-between" onClick={inspect}>Inspect request<ChevronRight className="h-4 w-4" /></Button>{isActionable(item) ? <Button onClick={["user_submitted", "admin_review"].includes(item.submission_state) ? inspect : act} disabled={pending}>{["new", "revision_requested"].includes(item.submission_state) ? "Send to customer" : "Review submission"}</Button> : <span className="text-xs font-medium text-slate-500">No Admin action required</span>}</div></article>;
+
+const Detail = ({ item, revision, setRevision, act, pending, reviewDocument }: { item: AdminRfiCase; revision: string; setRevision: (value: string) => void; act: (action: "send" | "approve" | "revision") => void; pending: boolean; reviewDocument: (url?: string | null) => void }) => {
+  const review = ["user_submitted", "admin_review"].includes(item.submission_state);
+  return <div className="space-y-6 px-5 py-6 sm:px-8"><Lifecycle item={item} /><Block title="Nium Request" icon={MessageSquareText}><div className="rounded-xl bg-amber-50 p-4 text-sm leading-6"><div className="text-xs font-semibold uppercase tracking-wider text-amber-800">Original Nium remarks</div><div className="mt-2 whitespace-pre-wrap">{remarks(item) || "No additional provider remarks were supplied."}</div></div></Block><Block title="Required Documents" icon={FileCheck2}>{fields(item).length ? <div className="grid gap-2 sm:grid-cols-2">{fields(item).map((field, index) => <div key={index} className="rounded-xl border p-4"><div className="font-medium">{String(field.fieldLabel || "Required item")}</div><div className="mt-1 text-sm text-slate-500">{String(field.type || field.fieldValue || "Document")}</div></div>)}</div> : <Unavailable text="No document requirements were supplied by the provider." />}</Block><Block title="Attached Documents" icon={FileText}>{item.documents?.length ? <div className="space-y-2">{item.documents.map((document) => <button key={document.id} type="button" onClick={() => reviewDocument(document.file_url)} className="flex w-full items-center justify-between rounded-xl border p-4 text-left hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"><div className="min-w-0"><div className="truncate font-medium">{document.original_name || "Supporting document"}</div><div className="text-xs text-slate-500">Authenticated preview · {document.status || "Status unavailable"}</div></div><ChevronRight className="h-4 w-4" /></button>)}</div> : <Unavailable text="The customer has not attached documents to this request." />}</Block><Block title="Customer Communication" icon={MessageSquareText}><div className="rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium">Customer explanation</div><div className="mt-1 text-slate-600">{item.user_explanation || "No explanation has been provided."}</div></div>{item.revision_reason ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><b>Latest revision request</b><div>{item.revision_reason}</div></div> : null}</Block><Block title="Review & Submission History" icon={History}>{item.history?.length ? <ol className="space-y-3">{item.history.map((event, index) => <li key={index} className="text-sm"><b>{event.event_type}</b><div className="text-slate-500">{event.from_state || "Start"} → {event.to_state || "Recorded"} · {formatDate(event.created_at)}</div></li>)}</ol> : <Unavailable text="No review history is available for this request." />}</Block><div className="rounded-2xl border bg-slate-50 p-5"><div className="flex items-center gap-2 font-semibold"><ShieldAlert className="h-4 w-4 text-amber-600" />Provider submission control</div><p className="mt-2 text-sm text-slate-600">Customer submission sends documents to Origin Wallet for review. It does not submit anything to Nium.</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">Provider submission is blocked while the exact Corporate RFI POST contract is unconfirmed.</div></div>{review ? <div className="rounded-2xl border p-5"><div className="font-semibold">Admin decision</div><Textarea aria-label={`Revision reason ${item.id}`} value={revision} onChange={(event) => setRevision(event.target.value)} className="mt-4" placeholder="Explain what the customer must correct" /><div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!revision.trim() || pending} onClick={() => act("revision")}>Request Revision</Button><Button disabled={pending} onClick={() => act("approve")}>Approve Documents</Button></div></div> : null}{["new", "revision_requested"].includes(item.submission_state) ? <div className="flex justify-end"><Button disabled={pending} onClick={() => act("send")}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send RFI Request to User</Button></div> : null}<details className="rounded-xl border p-4 text-sm"><summary className="cursor-pointer font-medium focus-visible:ring-2 focus-visible:ring-emerald-500">Technical diagnostics</summary><dl className="mt-4 grid gap-3 sm:grid-cols-2"><Diagnostic label="Case ID" value={String(item.id)} /><Diagnostic label="Provider status" value={item.status} /><Diagnostic label="Workflow state" value={item.submission_state} /><Diagnostic label="Origin" value={item.origin || "Not available"} /><Diagnostic label="Contract gate" value={item.contract_gate} /></dl></details></div>;
+};
+
+const Lifecycle = ({ item }: { item: AdminRfiCase }) => <div aria-label="RFI lifecycle" className="grid grid-cols-5 gap-1 rounded-2xl bg-slate-950 p-3">{steps.map(([label, Icon], index) => <div key={label} className="text-center"><div className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full ${index <= (stepByState[item.submission_state] ?? 0) ? "bg-emerald-400 text-slate-950" : "bg-slate-800 text-slate-500"}`}><Icon className="h-4 w-4" /></div><div className="mt-2 hidden text-[10px] text-white sm:block">{label}</div></div>)}</div>;
+const Metric = ({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) => <div className={`rounded-xl border p-3 ${accent ? "border-amber-300/30 bg-amber-300/10" : "border-white/10 bg-white/5"}`}><div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div><div className={`mt-1 truncate text-sm font-semibold ${accent ? "text-amber-200" : "text-white"}`}>{value}</div></div>;
+const Block = ({ title, icon: Icon, children }: { title: string; icon: typeof FileText; children: ReactNode }) => <section><div className="mb-3 flex items-center gap-2"><Icon className="h-4 w-4 text-emerald-700" /><h3 className="font-semibold">{title}</h3></div>{children}</section>;
+const Diagnostic = ({ label, value }: { label: string; value: string }) => <div><dt className="text-xs uppercase tracking-wider text-slate-400">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>;
+const Unavailable = ({ text }: { text: string }) => <div className="rounded-xl border border-dashed p-5 text-sm text-slate-500">{text}</div>;
+const State = ({ title, text, role }: { title: string; text: string; role?: "alert" }) => <div role={role} className="rounded-2xl border border-dashed bg-slate-50 p-8 text-center"><div className="font-semibold">{title}</div><div className="mt-1 text-sm text-slate-500">{text}</div></div>;
+const Empty = () => <State title="No authoritative Corporate RFI requests" text="New provider requests will appear after authoritative reconciliation." />;
+const Loading = () => <div aria-label="Loading Corporate RFI requests" className="grid gap-3 md:grid-cols-2">{[0, 1].map((item) => <div key={item} className="animate-pulse rounded-2xl border p-5"><div className="h-3 w-24 rounded bg-slate-200" /><div className="mt-3 h-6 w-2/3 rounded bg-slate-200" /><div className="mt-5 h-12 rounded bg-slate-100" /></div>)}</div>;

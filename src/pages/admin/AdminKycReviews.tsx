@@ -1775,7 +1775,7 @@ const AdminKycReviews = () => {
                     </Section> : null}
 
                     <Section title="Corporate RFI">
-                      {selectedUserId ? <CorporateRfiPanel userId={selectedUserId} token={token} /> : null}
+                      {selectedUserId ? <CorporateRfiPanel userId={selectedUserId} token={token} customerName={selectedProfile.business_name || selectedProfile.legal_name} /> : null}
                     </Section>
 
                     <Section title="Nium submission">

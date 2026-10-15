@@ -205,7 +205,9 @@ it("opens the requested customer review from a valid user_id deep link", async (
   renderPage("/admin/kyc-reviews?user_id=20");
 
   const reviewDialog = await screen.findByRole("dialog", { name: "KYC/KYB review" });
-  expect(await within(reviewDialog).findAllByText("Detail Business Name")).toHaveLength(2);
+  const profileInformation = (await within(reviewDialog).findByRole("heading", { name: "Profile information" })).parentElement;
+  expect(profileInformation).not.toBeNull();
+  expect(within(profileInformation as HTMLElement).getByText("Detail Business Name")).toBeVisible();
   expect(apiMocks.getAdminKycProfile).toHaveBeenCalledWith(20, "admin-token");
 });
 
@@ -228,7 +230,9 @@ it("keeps manual customer review selection functional", async () => {
   fireEvent.click((await screen.findAllByRole("button", { name: /^Review$/ }))[0]);
 
   const reviewDialog = await screen.findByRole("dialog", { name: "KYC/KYB review" });
-  expect(await within(reviewDialog).findAllByText("Detail Business Name")).toHaveLength(2);
+  const profileInformation = (await within(reviewDialog).findByRole("heading", { name: "Profile information" })).parentElement;
+  expect(profileInformation).not.toBeNull();
+  expect(within(profileInformation as HTMLElement).getByText("Detail Business Name")).toBeVisible();
   expect(apiMocks.getAdminKycProfile).toHaveBeenCalledWith(20, "admin-token");
 });
 
