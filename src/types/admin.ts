@@ -140,6 +140,16 @@ export interface AdminComplianceReviewResponse {
 export type AdminRfiScope = "customer" | "transaction";
 
 export type AdminRfiSubmissionState =
+  | "new"
+  | "sent_to_user"
+  | "user_draft"
+  | "user_submitted"
+  | "admin_review"
+  | "revision_requested"
+  | "admin_approved"
+  | "nium_submission_pending"
+  | "nium_submitted"
+  | "nium_submission_failed"
   | "not_claimed"
   | "draft"
   | "approved"
@@ -167,6 +177,14 @@ export interface AdminRfiCase {
     } | null;
   }> | null;
   supporting_file_count?: number;
+  origin?: string;
+  user_explanation?: string | null;
+  revision_reason?: string | null;
+  sent_to_user_at?: string | null;
+  user_submitted_at?: string | null;
+  admin_reviewed_at?: string | null;
+  documents?: Array<{ id: number; original_name?: string | null; mime_type?: string | null; file_size?: number | null; file_url?: string | null; status?: string | null }>;
+  history?: Array<{ event_type: string; from_state?: string | null; to_state?: string | null; created_at?: string | null }>;
   created_at?: string | null;
   updated_at?: string | null;
 }

@@ -58,6 +58,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { CorporateRfiPanel } from "@/components/admin/CorporateRfiPanel";
 
 const statusOptions = [
   { value: "all", label: "All statuses" },
@@ -1772,6 +1773,10 @@ const AdminKycReviews = () => {
                         </div>
                       )}
                     </Section> : null}
+
+                    <Section title="Corporate RFI">
+                      {selectedUserId ? <CorporateRfiPanel userId={selectedUserId} token={token} /> : null}
+                    </Section>
 
                     <Section title="Nium submission">
                       {profileDetailQuery.data?.biometric_kyc ? (

@@ -344,7 +344,9 @@ it("shows correction document fetch failures without opening a blank tab", async
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
   fireEvent.click(await screen.findByRole("button", { name: "Review document" }));
 
-  expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
+  const correctionReview = screen.getByRole("heading", { name: "Applicant correction review" }).parentElement;
+  expect(correctionReview).not.toBeNull();
+  expect(await within(correctionReview as HTMLElement).findByRole("alert")).toHaveTextContent("Forbidden");
   expect(open).not.toHaveBeenCalled();
 });
 

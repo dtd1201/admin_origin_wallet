@@ -341,6 +341,15 @@ export const submitAdminRfiCase = (id: number, token?: string | null) =>
     token,
   });
 
+export const sendAdminRfiToUser = (id: number, token?: string | null) =>
+  requestApi<AdminRfiCase>(`${adminEndpointConfig.niumRfiCases}/${id}/send-to-user`, { method: "POST", body: {}, token });
+
+export const requestAdminRfiRevision = (id: number, reason: string, token?: string | null) =>
+  requestApi<AdminRfiCase>(`${adminEndpointConfig.niumRfiCases}/${id}/request-revision`, { method: "POST", body: { reason }, token });
+
+export const approveAdminRfiUserSubmission = (id: number, token?: string | null) =>
+  requestApi<AdminRfiCase>(`${adminEndpointConfig.niumRfiCases}/${id}/approve-user-submission`, { method: "POST", body: {}, token });
+
 export const getAdminWallets = (query: string, token?: string | null) =>
   requestApi<PaginatedResponse<AdminWalletAccount>>(
     `${adminEndpointConfig.wallets}${query ? `?${query}` : ""}`,
