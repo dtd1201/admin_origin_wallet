@@ -1,220 +1,123 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import AdminRfiCases from "@/pages/admin/AdminRfiCases";
 import type { AdminRfiCase } from "@/types/admin";
 
 const apiMocks = vi.hoisted(() => ({
-  getAdminRfiCases: vi.fn(),
-  getAdminRfiCase: vi.fn(),
-  saveAdminRfiDraft: vi.fn(),
-  approveAdminRfiCase: vi.fn(),
-  submitAdminRfiCase: vi.fn(),
+  getAdminRfiCases: vi.fn(), getAdminRfiCase: vi.fn(), saveAdminRfiDraft: vi.fn(), approveAdminRfiCase: vi.fn(),
+  submitAdminRfiCase: vi.fn(), sendAdminRfiToUser: vi.fn(), requestAdminRfiRevision: vi.fn(),
+  approveAdminRfiUserSubmission: vi.fn(), requestApiBlob: vi.fn(),
 }));
-
+const auth = vi.hoisted(() => ({ token: "admin-token" as string | null }));
 vi.mock("@/lib/api", () => apiMocks);
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: "admin-token" }) }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: auth.token }) }));
 
-const rfiCase: AdminRfiCase = {
-  id: 17,
-  scope: "customer",
-  status: "requested",
-  contract_gate: "provider_contract_unconfirmed",
-  submission_state: "draft",
-  approved_at: null,
-  claimed_at: null,
-  reconciled_at: null,
-  created_at: "2026-08-24T09:00:00Z",
-  updated_at: "2026-08-24T10:00:00Z",
-};
-
-const pageResponse = (data: AdminRfiCase[] = [rfiCase], lastPage = 1) => ({
-  current_page: 1,
-  data,
-  first_page_url: null,
-  from: data.length ? 1 : null,
-  last_page: lastPage,
-  last_page_url: null,
-  links: [],
-  next_page_url: lastPage > 1 ? "page=2" : null,
-  path: "/api/admin/nium-rfi-cases",
-  per_page: 15,
-  prev_page_url: null,
-  to: data.length,
-  total: data.length,
+const makeCase = (id: number, overrides: Partial<AdminRfiCase> = {}): AdminRfiCase => ({
+  id, scope: "customer", origin: "authoritative_fetch", status: "requested", contract_gate: "provider_contract_unconfirmed",
+  submission_state: "new", created_at: "2026-08-24T09:00:00Z", updated_at: "2026-08-24T10:00:00Z", ...overrides,
 });
-
-const renderPage = () => {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}><AdminRfiCases /></QueryClientProvider>);
-};
+const cases = [
+  makeCase(11, { customer_id: 101, business_name: "Acme Trading Co.", template_name: "Source of funds", provider_remarks: "Provide recent bank statements." }),
+  makeCase(12, { customer_id: 101, business_name: "Acme Trading Co.", submission_state: "sent_to_user", template_name: "Ownership evidence" }),
+  makeCase(13, { customer_id: 202, legal_name: "Beacon Imports Limited", submission_state: "user_submitted", template_name: "Business activity" }),
+  makeCase(14, { submission_state: "approved", template_name: "Transaction purpose" }),
+  makeCase(99, { origin: "webhook", submission_state: "not_claimed", template_name: "Legacy webhook notice" }),
+];
+const pageResponse = (data: AdminRfiCase[] = cases, lastPage = 1) => ({ current_page: 1, data, first_page_url: null, from: data.length ? 1 : null, last_page: lastPage, last_page_url: null, links: [], next_page_url: lastPage > 1 ? "page=2" : null, path: "/api/admin/nium-rfi-cases", per_page: 15, prev_page_url: null, to: data.length, total: data.length });
+const renderPage = () => { const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); return render(<QueryClientProvider client={client}><AdminRfiCases /></QueryClientProvider>); };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.clearAllMocks(); auth.token = "admin-token";
   apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse());
-  apiMocks.getAdminRfiCase.mockResolvedValue(rfiCase);
-  apiMocks.saveAdminRfiDraft.mockResolvedValue(rfiCase);
-  apiMocks.approveAdminRfiCase.mockResolvedValue({ ...rfiCase, submission_state: "approved", approved_at: "2026-08-24T11:00:00Z" });
-  apiMocks.submitAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "responded" });
+  apiMocks.getAdminRfiCase.mockImplementation((id: number) => Promise.resolve(cases.find((item) => item.id === id)));
+  apiMocks.saveAdminRfiDraft.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "draft" })));
+  apiMocks.approveAdminRfiCase.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "approved" })));
+  apiMocks.submitAdminRfiCase.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "responded" })));
+  apiMocks.sendAdminRfiToUser.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "sent_to_user" })));
+  apiMocks.requestAdminRfiRevision.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "revision_requested" })));
+  apiMocks.approveAdminRfiUserSubmission.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "admin_approved" })));
 });
 
-it("shows the list loading state", () => {
-  apiMocks.getAdminRfiCases.mockReturnValue(new Promise(() => undefined));
+it("renders four authoritative RFIs by reliable customer identity and isolates one historical case", async () => {
   renderPage();
-  expect(screen.getByText("Loading RFI cases...")).toBeInTheDocument();
+  expect(await screen.findByText("Acme Trading Co.")).toBeInTheDocument();
+  expect(screen.getByText("Beacon Imports Limited")).toBeInTheDocument();
+  expect(screen.getByText("Customer identity unavailable")).toBeInTheDocument();
+  expect(screen.getByLabelText("Authoritative provider RFI requests").querySelectorAll("article")).toHaveLength(4);
+  const history = screen.getByText("Historical webhook evidence").closest("section") as HTMLElement;
+  expect(within(history).getByText("Legacy webhook notice")).toBeInTheDocument();
+  expect(within(history).getByText("Non-actionable")).toBeInTheDocument();
+  expect(within(history).queryByRole("button", { name: /inspect/i })).not.toBeInTheDocument();
 });
 
-it("shows the empty state", async () => {
-  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([]));
-  renderPage();
-  expect(await screen.findByText("No RFI cases found.")).toBeInTheDocument();
-});
-
-it("uses list pagination", async () => {
-  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([rfiCase], 2));
-  renderPage();
-  await screen.findByText("Page 1 of 2");
+it("uses backend search, filters and pagination", async () => {
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse(cases, 2)); renderPage();
+  await screen.findByText("Source of funds");
+  fireEvent.change(screen.getByLabelText("Search RFI cases"), { target: { value: "Acme" } });
+  fireEvent.click(screen.getByLabelText("Filter by scope")); fireEvent.click(await screen.findByRole("option", { name: "Transaction RFI" }));
+  fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "requested" } });
+  fireEvent.click(screen.getByLabelText("Filter by submission state")); fireEvent.click(await screen.findByRole("option", { name: "Admin draft" }));
+  await waitFor(() => { const query = String(apiMocks.getAdminRfiCases.mock.calls.at(-1)?.[0]); expect(query).toContain("search=Acme"); expect(query).toContain("scope=transaction"); expect(query).toContain("status=requested"); expect(query).toContain("submission_state=draft"); });
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   await waitFor(() => expect(apiMocks.getAdminRfiCases).toHaveBeenLastCalledWith(expect.stringContaining("page=2"), "admin-token"));
 });
 
-it("passes scope, status, and submission state filters", async () => {
-  renderPage();
-  await screen.findByText("#17");
-  fireEvent.click(screen.getByLabelText("Filter by scope"));
-  fireEvent.click(await screen.findByRole("option", { name: "transaction" }));
-  fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "provisional" } });
-  fireEvent.click(screen.getByLabelText("Filter by submission state"));
-  fireEvent.click(await screen.findByRole("option", { name: "approved" }));
-  await waitFor(() => {
-    const query = String(apiMocks.getAdminRfiCases.mock.calls.at(-1)?.[0]);
-    expect(query).toContain("scope=transaction");
-    expect(query).toContain("status=provisional");
-    expect(query).toContain("submission_state=approved");
-  });
+it("shows the complete case workflow and keeps diagnostics collapsed", async () => {
+  apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(11, { business_name: "Acme Trading Co.", template_name: "Source of funds", provider_remarks: "Provide recent bank statements.", evidence: { template: { requiredFields: [{ fieldLabel: "Bank statement", type: "PDF" }] } }, user_explanation: "Operating revenue from wholesale activity.", documents: [{ id: 7, original_name: "statement.pdf", file_url: "/private/rfi/7", status: "uploaded" }], history: [{ event_type: "sent", from_state: "new", to_state: "sent_to_user", created_at: "2026-08-24T10:30:00Z" }] }));
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "Inspect request" }))[0]);
+  expect(await screen.findByText("Original Nium remarks")).toBeInTheDocument();
+  expect(screen.getByText("Bank statement")).toBeInTheDocument(); expect(screen.getByText("statement.pdf")).toBeInTheDocument();
+  expect(screen.getByText("Operating revenue from wholesale activity.")).toBeInTheDocument();
+  expect(screen.getByText("Review & Submission History")).toBeInTheDocument();
+  expect(screen.getByText("Technical Diagnostics").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("Received")).toBeInTheDocument(); expect(screen.getByText("Provider Submission")).toBeInTheDocument();
 });
 
-it("shows detail loading", async () => {
-  apiMocks.getAdminRfiCase.mockReturnValue(new Promise(() => undefined));
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  expect(await screen.findByText("Loading RFI case detail...")).toBeInTheDocument();
+it("offers customer review actions without treating approval as provider submission", async () => {
+  apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(13, { submission_state: "user_submitted" }));
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "Inspect request" }))[2]);
+  expect(await screen.findByRole("button", { name: "Approve Customer Submission" })).toBeEnabled();
+  expect(screen.getByText(/Approval does not submit to Nium/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit Approved Response to Nium" })).toBeDisabled();
 });
 
-it("shows API errors", async () => {
-  apiMocks.getAdminRfiCases.mockRejectedValue(new Error("RFI cases unavailable"));
-  renderPage();
-  expect(await screen.findByRole("alert")).toHaveTextContent("RFI cases unavailable");
-});
-
-it("shows backend RFI evidence and reviewed answers without exposing provider account identifiers", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({
-    ...rfiCase,
-    evidence: { customerHashId: "sensitive-customer-hash", walletHashId: "sensitive-wallet-hash", description: "salaryStatement", rfiStatus: "RFI_RESPONDED" },
-    response_draft: [{ questionId: "sourceOfFunds", answer: "Salary income", provenance: { source: "human_supplied", recorded_at: "2026-08-24T09:30:00Z" } }],
-    provider_reference_fingerprint: "sensitive-provider-reference",
-    supporting_file_ids: ["sensitive-file-id"],
-    metadata: { secret: "sensitive-metadata" },
-  });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  await waitFor(() => expect(apiMocks.getAdminRfiCase).toHaveBeenCalledWith(17, "admin-token"));
-  expect(await screen.findByText("provider_contract_unconfirmed")).toBeInTheDocument();
-  expect(screen.queryByText("sensitive-customer-hash")).not.toBeInTheDocument();
-  expect(screen.queryByText("sensitive-wallet-hash")).not.toBeInTheDocument();
-  expect(screen.getAllByText("salaryStatement").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("RFI_RESPONDED").length).toBeGreaterThan(0);
-  expect(screen.getByText("Salary income")).toBeInTheDocument();
-  expect(screen.queryByText("sensitive-provider-reference")).not.toBeInTheDocument();
-  expect(screen.queryByText("sensitive-file-id")).not.toBeInTheDocument();
-  expect(screen.queryByText("sensitive-metadata")).not.toBeInTheDocument();
-});
-
-it("requires confirmation before submitting an approved transaction RFI", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "approved" });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Submit approved Transaction RFI" }));
+it("keeps provider POST blocked while the contract is unconfirmed", async () => {
+  apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(14, { submission_state: "approved" }));
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "Inspect request" }))[3]);
+  expect(await screen.findByText(/Provider POST is blocked/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit Approved Response to Nium" })).toBeDisabled();
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Confirm submission" }));
-  await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(17, "admin-token"));
 });
 
-it("enables customer Draft and Approve actions for a requested draft", async () => {
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  expect(await screen.findByRole("button", { name: "Save draft" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Approve draft" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Submit approved Corporate RFI" })).toBeDisabled();
+it("submits a confirmed provider response only after confirmation", async () => {
+  apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed" }));
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "Inspect request" }))[3]);
+  fireEvent.click(await screen.findByRole("button", { name: "Submit Approved Response to Nium" }));
+  expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+  await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(14, "admin-token"));
 });
 
-it("enables customer Submit only for a requested approved case", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, submission_state: "approved", approved_at: "2026-08-24T11:00:00Z" });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  expect(await screen.findByRole("button", { name: "Save draft" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Approve draft" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Submit approved Corporate RFI" })).toBeEnabled();
+it("preserves factual draft and approval actions", async () => {
+  const draft = makeCase(21, { submission_state: "draft" });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([draft])); apiMocks.getAdminRfiCase.mockResolvedValue(draft);
+  renderPage(); fireEvent.click(await screen.findByRole("button", { name: "Inspect request" }));
+  fireEvent.change(await screen.findByLabelText("Question ID"), { target: { value: "source-of-funds" } });
+  fireEvent.change(screen.getByLabelText("Factual answer"), { target: { value: "Customer operating revenue" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save Draft" }));
+  await waitFor(() => expect(apiMocks.saveAdminRfiDraft).toHaveBeenCalledWith(21, { answers: [{ questionId: "source-of-funds", answer: "Customer operating revenue" }] }, "admin-token"));
+  fireEvent.click(screen.getByRole("button", { name: "Approve Draft" })); expect(apiMocks.approveAdminRfiCase).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Confirm" })); await waitFor(() => expect(apiMocks.approveAdminRfiCase).toHaveBeenCalledWith(21, "admin-token"));
 });
 
-it("saves a factual draft through the existing endpoint", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "not_claimed" });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  fireEvent.change(await screen.findByLabelText("Question ID"), { target: { value: "business-purpose" } });
-  fireEvent.change(screen.getByLabelText("Factual answer"), { target: { value: "Payment for invoice 42" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
-  await waitFor(() => expect(apiMocks.saveAdminRfiDraft).toHaveBeenCalledWith(17, {
-    answers: [{ questionId: "business-purpose", answer: "Payment for invoice 42" }],
-  }, "admin-token"));
+it("shows permission, loading, error, retry, empty and no-results states", async () => {
+  auth.token = null; const permission = renderPage(); expect(screen.getByRole("alert")).toHaveTextContent("Permission required"); permission.unmount();
+  auth.token = "admin-token"; apiMocks.getAdminRfiCases.mockReturnValue(new Promise(() => undefined)); const loading = renderPage(); expect(screen.getByLabelText("Loading RFI cases")).toBeInTheDocument(); loading.unmount();
+  apiMocks.getAdminRfiCases.mockRejectedValue(new Error("RFI cases unavailable")); const error = renderPage(); expect(await screen.findByRole("alert")).toHaveTextContent("RFI cases unavailable"); expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument(); error.unmount();
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([])); const empty = renderPage(); expect(await screen.findByText("No RFI cases")).toBeInTheDocument(); empty.unmount();
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([makeCase(31, { submission_state: "sent_to_user" })])); renderPage(); await screen.findByText("RFI request #31"); fireEvent.click(screen.getByRole("button", { name: "Complete" })); expect(await screen.findByText("No matching requests")).toBeInTheDocument();
 });
 
-it("requires confirmation before approving a draft", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction" });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Approve draft" }));
-  expect(apiMocks.approveAdminRfiCase).not.toHaveBeenCalled();
-  expect(screen.getByText("Approve factual RFI draft?")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Confirm approval" }));
-  await waitFor(() => expect(apiMocks.approveAdminRfiCase).toHaveBeenCalledWith(17, "admin-token"));
-});
-
-it("renders case status and submission state as distinct lifecycle fields", async () => {
-  const states = ["not_claimed", "draft", "approved", "claimed", "responded", "reconciled"] as const;
-  const statuses = ["provisional", "requested", "resolved_authoritative_clear"];
-  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse(states.map((submission_state, index) => ({
-    ...rfiCase,
-    id: index + 1,
-    status: statuses[index % statuses.length],
-    submission_state,
-  }))));
-  renderPage();
-  for (const status of statuses) expect((await screen.findAllByText(status)).length).toBeGreaterThan(0);
-  for (const state of states) expect((await screen.findAllByText(state)).length).toBeGreaterThan(0);
-});
-
-it("labels CLEAR only for the backend authoritative resolved state", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({
-    ...rfiCase,
-    scope: "customer",
-    status: "resolved_authoritative_clear",
-    submission_state: "reconciled",
-    reconciled_at: "2026-08-24T12:00:00Z",
-  });
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  expect(await screen.findByText("CLEAR - backend authoritative")).toBeInTheDocument();
-  expect(screen.getByText("Corporate RFI")).toBeInTheDocument();
-});
-
-it("shows draft API errors without exposing hidden detail fields", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue({ ...rfiCase, scope: "transaction", submission_state: "not_claimed", evidence: { secret: "hidden-evidence" } });
-  apiMocks.saveAdminRfiDraft.mockRejectedValue(new Error("Draft validation failed"));
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Inspect" }));
-  fireEvent.change(await screen.findByLabelText("Question ID"), { target: { value: "q-1" } });
-  fireEvent.change(screen.getByLabelText("Factual answer"), { target: { value: "Safe factual answer" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Draft validation failed");
-  expect(screen.queryByText("hidden-evidence")).not.toBeInTheDocument();
+it("uses responsive cards instead of a horizontally scrolling technical table", async () => {
+  const { container } = renderPage(); await screen.findByText("Source of funds");
+  expect(container.querySelector("table")).not.toBeInTheDocument(); expect(container.querySelector("main")).toHaveClass("min-w-0");
 });

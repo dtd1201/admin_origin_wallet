@@ -178,6 +178,14 @@ export interface AdminRfiCase {
   }> | null;
   supporting_file_count?: number;
   origin?: string;
+  template_name?: string | null;
+  provider_remarks?: string | null;
+  required_document_count?: number;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  legal_name?: string | null;
+  business_name?: string | null;
+  customer?: { legal_name?: string | null; business_name?: string | null } | null;
   user_explanation?: string | null;
   revision_reason?: string | null;
   sent_to_user_at?: string | null;
