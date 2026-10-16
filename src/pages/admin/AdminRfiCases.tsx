@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
-import { approveAdminRfiCase, approveAdminRfiUserSubmission, getAdminRfiCase, getAdminRfiCases, requestAdminRfiRevision, requestApiBlob, saveAdminRfiDraft, sendAdminRfiToUser, submitAdminRfiCase } from "@/lib/api";
+import { approveAdminRfiCase, approveAdminRfiUserSubmission, getAdminRfiCase, getAdminRfiCases, refreshAdminRfiStatus, requestAdminRfiRevision, requestApiBlob, saveAdminRfiDraft, sendAdminRfiToUser, submitAdminRfiCase } from "@/lib/api";
 import type { AdminRfiCase, AdminRfiScope, AdminRfiSubmissionState } from "@/types/admin";
 
 type OperationalFilter = "all" | "needs_action" | "with_customer" | "ready_for_review" | "complete";
@@ -22,14 +22,15 @@ const labels: Record<string, string> = {
   admin_review: "In Admin review", revision_requested: "Customer revision requested", admin_approved: "Admin approved",
   nium_submission_pending: "Provider submission pending", nium_submitted: "Submitted to Nium", nium_submission_failed: "Provider submission failed",
   not_claimed: "Response not started", draft: "Admin draft", approved: "Approved for provider", claimed: "Provider processing",
+  provider_acknowledged: "Provider acknowledged", unknown: "Outcome unknown", rejected: "Provider rejected",
   responded: "Provider responded", reconciled: "Reconciled",
 };
 const stepByState: Record<string, number> = {
   new: 0, not_claimed: 0, draft: 0, sent_to_user: 1, user_draft: 1, revision_requested: 1, user_submitted: 2,
   admin_review: 3, admin_approved: 3, approved: 3, nium_submission_pending: 3, nium_submission_failed: 3,
-  nium_submitted: 4, claimed: 4, responded: 4, reconciled: 4,
+  nium_submitted: 4, claimed: 4, provider_acknowledged: 4, unknown: 4, rejected: 4, responded: 4, reconciled: 4,
 };
-const submissionStates: Array<AdminRfiSubmissionState | "all"> = ["all", "new", "sent_to_user", "user_draft", "user_submitted", "admin_review", "revision_requested", "admin_approved", "nium_submission_pending", "nium_submitted", "nium_submission_failed", "not_claimed", "draft", "approved", "claimed", "responded", "reconciled"];
+const submissionStates: Array<AdminRfiSubmissionState | "all"> = ["all", "new", "sent_to_user", "user_draft", "user_submitted", "admin_review", "revision_requested", "admin_approved", "nium_submission_pending", "nium_submitted", "nium_submission_failed", "not_claimed", "draft", "approved", "claimed", "provider_acknowledged", "unknown", "rejected", "responded", "reconciled"];
 const formatDate = (value?: string | null) => { if (!value) return "Not available"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "Not available" : new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date); };
 const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : "";
 const template = (item: AdminRfiCase) => item.evidence?.template && typeof item.evidence.template === "object" ? item.evidence.template as Record<string, unknown> : undefined;
@@ -78,7 +79,7 @@ const customerName = (item: AdminRfiCase) => text(item.customer_name) || text(it
 const historical = (item: AdminRfiCase) => Boolean(item.origin && item.origin !== "authoritative_fetch");
 const withCustomer = (state: string) => ["sent_to_user", "user_draft", "revision_requested"].includes(state);
 const needsAction = (state: string) => ["new", "revision_requested", "user_submitted", "admin_review", "not_claimed", "draft", "approved", "nium_submission_failed"].includes(state);
-const complete = (state: string) => ["nium_submitted", "responded", "reconciled"].includes(state);
+const complete = (state: string) => ["nium_submitted", "provider_acknowledged", "unknown", "rejected", "responded", "reconciled"].includes(state);
 const permissionFailure = (error: unknown) => error instanceof Error && /403|forbidden|permission|unauthori[sz]ed/i.test(error.message);
 const nextAction = (item: AdminRfiCase) => {
   if (["new", "revision_requested"].includes(item.submission_state)) return "Send request to customer";
@@ -104,18 +105,20 @@ const AdminRfiCases = () => {
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const [liveConfirmation, setLiveConfirmation] = useState("");
 
   const query = useMemo(() => { const params = new URLSearchParams({ page: String(page) }); if (search.trim()) params.set("search", search.trim()); if (scope !== "all") params.set("scope", scope); if (status.trim()) params.set("status", status.trim()); if (submissionState !== "all") params.set("submission_state", submissionState); return params.toString(); }, [page, scope, search, status, submissionState]);
   const casesQuery = useQuery({ queryKey: ["admin", "nium-rfi-cases", query, token], enabled: !!token, queryFn: () => getAdminRfiCases(query, token) });
   const detailQuery = useQuery({ queryKey: ["admin", "nium-rfi-cases", "detail", selectedId, token], enabled: !!token && selectedId !== null, queryFn: () => getAdminRfiCase(selectedId as number, token) });
   const refresh = async (updated?: AdminRfiCase) => { if (updated) client.setQueryData(["admin", "nium-rfi-cases", "detail", updated.id, token], updated); await client.invalidateQueries({ queryKey: ["admin", "nium-rfi-cases"] }); };
   const mutation = useMutation({
-    mutationFn: async ({ action, item }: { action: "send" | "revision" | "approve-user" | "save-draft" | "approve-draft" | "submit-provider"; item: AdminRfiCase }) => {
+    mutationFn: async ({ action, item }: { action: "send" | "revision" | "approve-user" | "save-draft" | "approve-draft" | "submit-provider" | "refresh-provider"; item: AdminRfiCase }) => {
       if (action === "send") return sendAdminRfiToUser(item.id, token);
       if (action === "revision") return requestAdminRfiRevision(item.id, revisionReason.trim(), token);
       if (action === "approve-user") return approveAdminRfiUserSubmission(item.id, token);
       if (action === "approve-draft") return approveAdminRfiCase(item.id, token);
-      if (action === "submit-provider") { if (item.contract_gate === "provider_contract_unconfirmed") throw new Error("Provider submission is blocked until the backend confirms the Nium POST contract."); return submitAdminRfiCase(item.id, token); }
+      if (action === "submit-provider") { if (!item.submission_eligible || !item.provider_reference_fingerprint || !item.template_fingerprint) throw new Error("The backend has not confirmed that this exact Corporate RFI is eligible for live submission."); return submitAdminRfiCase(item, token); }
+      if (action === "refresh-provider") { if (!item.status_refresh_eligible || !item.provider_reference_fingerprint || !item.template_fingerprint) throw new Error("The backend has not confirmed that this case can be refreshed."); return refreshAdminRfiStatus(item, token); }
       const factualAnswers = answers.map((answer) => ({ questionId: answer.questionId.trim(), answer: answer.answer.trim() }));
       if (factualAnswers.some((answer) => !answer.questionId || !answer.answer)) throw new Error("Each response item requires a question ID and factual answer.");
       return saveAdminRfiDraft(item.id, { answers: factualAnswers }, token);
@@ -128,14 +131,16 @@ const AdminRfiCases = () => {
         "save-draft": "The factual response draft was saved.",
         "approve-draft": "The factual response draft was approved.",
         "submit-provider": "The approved response was submitted to Nium.",
+        "refresh-provider": "The authoritative Nium status was refreshed.",
       };
       setActionError("");
       setActionSuccess(messages[variables.action]);
       setConfirmAction(null);
+      setLiveConfirmation("");
       setRevisionReason("");
       await refresh(updated);
     },
-    onError: (error) => { setConfirmAction(null); setActionSuccess(""); setActionError(error instanceof Error ? error.message : "Unable to update the RFI request."); },
+    onError: (error) => { setConfirmAction(null); setLiveConfirmation(""); setActionSuccess(""); setActionError(error instanceof Error ? error.message : "Unable to update the RFI request."); },
   });
 
   const rows = casesQuery.data?.data ?? [];
@@ -200,6 +205,7 @@ const AdminRfiCases = () => {
             act={(action) => mutation.mutate({ action, item: selected })}
             preview={preview}
             confirm={setConfirmAction}
+            refreshStatus={() => mutation.mutate({ action: "refresh-provider", item: selected })}
           />
         ) : null}
       </SheetContent>
@@ -218,14 +224,15 @@ const AdminRfiCases = () => {
           </AlertDialogTitle>
           <AlertDialogDescription>
             {confirmAction === "submit-provider"
-              ? "This invokes the authenticated provider submission endpoint. Continue only after the customer submission and evidence have been reviewed."
+              ? `This is an irreversible live submission for ${selected ? customerName(selected) || "the selected company" : "the selected company"}, Case #${selected?.id ?? ""}. Type SUBMIT ${selected?.id ?? ""} to continue.`
               : "Approval advances the backend workflow. It does not submit the response to Nium."}
           </AlertDialogDescription>
+          {confirmAction === "submit-provider" ? <Input aria-label="Live submission confirmation" value={liveConfirmation} onChange={(event) => setLiveConfirmation(event.target.value)} placeholder={`SUBMIT ${selected?.id ?? ""}`} /> : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={mutation.isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || confirmAction === "submit-provider" && liveConfirmation !== `SUBMIT ${selected?.id ?? ""}`}
             onClick={(event) => {
               event.preventDefault();
               if (selected && confirmAction) mutation.mutate({ action: confirmAction, item: selected });
@@ -279,7 +286,7 @@ const RequestCard = ({ item, inspect }: { item: AdminRfiCase; inspect: () => voi
   </article>
 );
 
-const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReason, error, success, pending, act, preview, confirm }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; error: string; success: string; pending: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; preview: (url?: string | null) => void; confirm: (action: ConfirmAction) => void }) => {
+const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReason, error, success, pending, act, preview, confirm, refreshStatus }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; error: string; success: string; pending: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; preview: (url?: string | null) => void; confirm: (action: ConfirmAction) => void; refreshStatus: () => void }) => {
   const required = fields(item);
   const documentFields = required.filter((value) => /document|file|evidence/i.test(`${fieldType(value)} ${fieldKey(value)}`));
   const informationFields = required.filter((value) => !documentFields.includes(value));
@@ -290,7 +297,7 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
   const missingInformation = informationFields.filter((value) => fieldKey(value) && !answeredKeys.has(fieldKey(value)));
   const canDraft = item.status === "requested" && ["not_claimed", "draft"].includes(item.submission_state);
   const canApprove = item.status === "requested" && item.submission_state === "draft";
-  const canSubmit = item.status === "requested" && ["approved", "admin_approved", "nium_submission_failed"].includes(item.submission_state) && item.contract_gate !== "provider_contract_unconfirmed";
+  const canSubmit = item.submission_eligible === true;
   const review = ["user_submitted", "admin_review"].includes(item.submission_state);
 
   return (
@@ -307,7 +314,7 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
         <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="Case" value={`#${item.id}`} />
           <Fact label="Origin" value={item.origin === "authoritative_fetch" ? "Authoritative provider fetch" : item.origin || "Not supplied"} />
-          <Fact label="Provider status" value={item.status} />
+          <Fact label="Provider status" value={item.provider_status || item.status} />
           <Fact label="Last updated" value={formatDate(item.updated_at)} />
         </dl>
       </section>
@@ -374,7 +381,7 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
       <section aria-labelledby="workflow-actions-title" className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div><h3 id="workflow-actions-title" className="font-semibold text-slate-950">Workflow actions</h3><p className="mt-1 text-sm text-slate-600">{nextAction(item)}</p></div>
-          <WorkflowActions item={item} answers={answers} setAnswers={setAnswers} revisionReason={revisionReason} setRevisionReason={setRevisionReason} pending={pending} review={review} canDraft={canDraft} canApprove={canApprove} canSubmit={canSubmit} act={act} confirm={confirm} />
+          <WorkflowActions item={item} answers={answers} setAnswers={setAnswers} revisionReason={revisionReason} setRevisionReason={setRevisionReason} pending={pending} review={review} canDraft={canDraft} canApprove={canApprove} canSubmit={canSubmit} act={act} confirm={confirm} refreshStatus={refreshStatus} />
         </div>
         {success ? <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{success}</div> : null}
         {error ? <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
@@ -430,12 +437,13 @@ const ReviewMetric = ({ label, value, warning = false }: { label: string; value:
   </div>
 );
 
-const WorkflowActions = ({ item, answers, setAnswers, revisionReason, setRevisionReason, pending, review, canDraft, canApprove, canSubmit, act, confirm }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; pending: boolean; review: boolean; canDraft: boolean; canApprove: boolean; canSubmit: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; confirm: (action: ConfirmAction) => void }) => (
+const WorkflowActions = ({ item, answers, setAnswers, revisionReason, setRevisionReason, pending, review, canDraft, canApprove, canSubmit, act, confirm, refreshStatus }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; pending: boolean; review: boolean; canDraft: boolean; canApprove: boolean; canSubmit: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; confirm: (action: ConfirmAction) => void; refreshStatus: () => void }) => (
   <div className="w-full space-y-3 xl:max-w-2xl">
     {["new", "revision_requested"].includes(item.submission_state) ? <Button className="w-full sm:w-auto" disabled={pending} onClick={() => act("send")}><Send className="h-4 w-4" />{pending ? "Sending..." : "Send request to customer"}</Button> : null}
     {review ? <div className="rounded-xl border border-slate-200 p-4"><Label htmlFor="revision-reason">Revision reason</Label><Textarea id="revision-reason" className="mt-2" value={revisionReason} onChange={(event) => setRevisionReason(event.target.value)} placeholder="Explain exactly what the customer must correct" /><div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!revisionReason.trim() || pending} onClick={() => act("revision")}>Request revision</Button><Button disabled={pending} onClick={() => act("approve-user")}>Approve customer submission</Button></div><p className="mt-3 text-xs text-slate-500">Origin Wallet approval does not submit this request to Nium.</p></div> : null}
     {canDraft || item.submission_state === "approved" ? <div className="rounded-xl border border-slate-200 p-4"><div className="font-medium text-slate-900">Admin factual response</div><div className="mt-3 space-y-3">{answers.map((answer, index) => <div key={index} className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor={`question-${index}`}>Question ID</Label><Input id={`question-${index}`} className="mt-1" disabled={!canDraft || pending} value={answer.questionId} onChange={(event) => setAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? { ...value, questionId: event.target.value } : value))} /></div><div><Label htmlFor={`answer-${index}`}>Factual answer</Label><Textarea id={`answer-${index}`} className="mt-1 min-h-10" disabled={!canDraft || pending} value={answer.answer} onChange={(event) => setAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? { ...value, answer: event.target.value } : value))} /></div></div>)}</div><div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!canDraft || pending} onClick={() => act("save-draft")}>Save factual draft</Button><Button disabled={!canApprove || pending} onClick={() => confirm("approve-draft")}>Approve factual draft</Button></div></div> : null}
     {["approved", "admin_approved", "nium_submission_failed"].includes(item.submission_state) ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="font-medium text-amber-950">Nium submission</div><p className="mt-1 text-sm text-amber-900">{item.contract_gate === "provider_contract_unconfirmed" ? "Blocked because the exact Corporate RFI provider contract remains unconfirmed." : "The backend reports that provider submission is available after confirmation."}</p><Button className="mt-3 w-full sm:w-auto" disabled={!canSubmit || pending} onClick={() => confirm("submit-provider")}><Send className="h-4 w-4" />Submit approved response to Nium</Button></div> : null}
+    {item.status_refresh_eligible ? <Button className="w-full sm:w-auto" variant="outline" disabled={pending} onClick={refreshStatus}><RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} />Refresh Nium Status</Button> : null}
     {!needsAction(item.submission_state) ? <div className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600">No state-changing Admin action is available for the current backend workflow state.</div> : null}
   </div>
 );

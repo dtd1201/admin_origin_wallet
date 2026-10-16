@@ -5,7 +5,7 @@ import type { AdminRfiCase } from "@/types/admin";
 
 const apiMocks = vi.hoisted(() => ({
   getAdminRfiCases: vi.fn(), getAdminRfiCase: vi.fn(), saveAdminRfiDraft: vi.fn(), approveAdminRfiCase: vi.fn(),
-  submitAdminRfiCase: vi.fn(), sendAdminRfiToUser: vi.fn(), requestAdminRfiRevision: vi.fn(),
+  submitAdminRfiCase: vi.fn(), refreshAdminRfiStatus: vi.fn(), sendAdminRfiToUser: vi.fn(), requestAdminRfiRevision: vi.fn(),
   approveAdminRfiUserSubmission: vi.fn(), requestApiBlob: vi.fn(),
 }));
 const auth = vi.hoisted(() => ({ token: "admin-token" as string | null }));
@@ -32,7 +32,8 @@ beforeEach(() => {
   apiMocks.getAdminRfiCase.mockImplementation((id: number) => Promise.resolve(cases.find((item) => item.id === id)));
   apiMocks.saveAdminRfiDraft.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "draft" })));
   apiMocks.approveAdminRfiCase.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "approved" })));
-  apiMocks.submitAdminRfiCase.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "responded" })));
+  apiMocks.submitAdminRfiCase.mockImplementation((item: AdminRfiCase) => Promise.resolve(makeCase(item.id, { submission_state: "responded" })));
+  apiMocks.refreshAdminRfiStatus.mockImplementation((item: AdminRfiCase) => Promise.resolve(makeCase(item.id, { submission_state: "responded", provider_status: "RFI_RESPONDED" })));
   apiMocks.sendAdminRfiToUser.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "sent_to_user" })));
   apiMocks.requestAdminRfiRevision.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "revision_requested" })));
   apiMocks.approveAdminRfiUserSubmission.mockImplementation((id: number) => Promise.resolve(makeCase(id, { submission_state: "admin_approved" })));
@@ -127,12 +128,25 @@ it("keeps provider POST blocked while the contract is unconfirmed", async () => 
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
 });
 
-it("submits a confirmed provider response only after confirmation", async () => {
-  apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed" }));
+it("submits a confirmed provider response only after exact live confirmation", async () => {
+  const eligible = makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed", submission_eligible: true, provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  apiMocks.getAdminRfiCase.mockResolvedValue(eligible);
   renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
   fireEvent.click(await screen.findByRole("button", { name: "Submit approved response to Nium" }));
-  expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-  await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(14, "admin-token"));
+  expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 14" } });
+  fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+  await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(eligible, "admin-token"));
+});
+
+it("refreshes authoritative Nium status without invoking submission", async () => {
+  const refreshable = makeCase(14, { submission_state: "unknown", status_refresh_eligible: true, provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  apiMocks.getAdminRfiCase.mockResolvedValue(refreshable);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
+  fireEvent.click(await screen.findByRole("button", { name: "Refresh Nium Status" }));
+  await waitFor(() => expect(apiMocks.refreshAdminRfiStatus).toHaveBeenCalledWith(refreshable, "admin-token"));
+  expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
 });
 
 it("preserves factual draft and approval actions", async () => {

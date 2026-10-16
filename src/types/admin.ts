@@ -23,6 +23,7 @@ export interface ProviderSummary {
   name: string;
   logo_url?: string | null;
   status: string;
+  provider_status?: string | null;
   is_available_for_onboarding?: boolean;
   supports_beneficiaries?: boolean;
   supports_data_sync?: boolean;
@@ -154,6 +155,9 @@ export type AdminRfiSubmissionState =
   | "draft"
   | "approved"
   | "claimed"
+  | "provider_acknowledged"
+  | "unknown"
+  | "rejected"
   | "responded"
   | "reconciled";
 
@@ -181,6 +185,10 @@ export interface AdminRfiCase {
   template_name?: string | null;
   provider_remarks?: string | null;
   required_document_count?: number;
+  submission_eligible?: boolean;
+  status_refresh_eligible?: boolean;
+  provider_reference_fingerprint?: string | null;
+  template_fingerprint?: string | null;
   customer_id?: number | null;
   customer_name?: string | null;
   legal_name?: string | null;

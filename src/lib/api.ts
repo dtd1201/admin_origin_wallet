@@ -334,10 +334,26 @@ export const approveAdminRfiCase = (id: number, token?: string | null) =>
     token,
   });
 
-export const submitAdminRfiCase = (id: number, token?: string | null) =>
-  requestApi<AdminRfiCase>(`${adminEndpointConfig.niumRfiCases}/${id}/submit`, {
+export const submitAdminRfiCase = (item: Pick<AdminRfiCase, "id" | "provider_reference_fingerprint" | "template_fingerprint">, token?: string | null) =>
+  requestApi<AdminRfiCase>(`${adminEndpointConfig.niumRfiCases}/${item.id}/submit`, {
     method: "POST",
-    body: {},
+    body: {
+      case_id: item.id,
+      confirmation: "SUBMIT_TO_NIUM_LIVE",
+      provider_reference_fingerprint: item.provider_reference_fingerprint,
+      template_fingerprint: item.template_fingerprint,
+    },
+    token,
+  });
+
+export const refreshAdminRfiStatus = (item: Pick<AdminRfiCase, "id" | "provider_reference_fingerprint" | "template_fingerprint">, token?: string | null) =>
+  requestApi<AdminRfiCase>(`${adminEndpointConfig.niumRfiCases}/${item.id}/refresh-status`, {
+    method: "POST",
+    body: {
+      case_id: item.id,
+      provider_reference_fingerprint: item.provider_reference_fingerprint,
+      template_fingerprint: item.template_fingerprint,
+    },
     token,
   });
 
