@@ -189,10 +189,10 @@ export interface AdminRfiCase {
   status_refresh_eligible?: boolean;
   provider_reference_fingerprint?: string | null;
   template_fingerprint?: string | null;
-  provider_http_status?: number | null;
-  provider_outcome?: string | null;
+  submission_http_status?: number | null;
+  submission_outcome?: "PENDING" | "ACKNOWLEDGED" | "REJECTED" | "UNKNOWN" | "RECONCILED" | null;
   authoritative_rfi_status?: string | null;
-  manual_reconciliation_required?: boolean | null;
+  reconciliation_required?: boolean | null;
   customer_id?: number | null;
   customer_name?: string | null;
   legal_name?: string | null;

@@ -134,7 +134,7 @@ it("labels responded RFIs as under compliance review without implying clearance"
 });
 
 it("shows only safe bounded provider submission history fields", async () => {
-  const item = makeCase(56, { submission_state: "responded", provider_status: "RFI_RESPONDED", provider_http_status: 200, provider_outcome: "RECONCILED", authoritative_rfi_status: "RFI_RESPONDED", reconciled_at: "2026-10-16T08:00:00Z", manual_reconciliation_required: false });
+  const item = makeCase(56, { submission_state: "responded", provider_status: "RFI_RESPONDED", submission_http_status: 200, submission_outcome: "RECONCILED", authoritative_rfi_status: "RFI_RESPONDED", reconciled_at: "2026-10-16T08:00:00Z", reconciliation_required: false });
   apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
   renderPage(); const dialog = await openOnlyCaseDetail(item.id);
   const history = within(dialog).getByLabelText("Safe provider submission history");

@@ -412,11 +412,11 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
       <Block title="Provider Submission History" icon={History}>
         <dl aria-label="Safe provider submission history" className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 lg:grid-cols-3">
           <Fact label="Submission state" value={labels[item.submission_state] || humanize(item.submission_state)} />
-          <Fact label="POST HTTP status" value={typeof item.provider_http_status === "number" ? String(item.provider_http_status) : "Not available"} />
-          <Fact label="Provider outcome" value={safeText(item.provider_outcome)} />
+          <Fact label="POST HTTP status" value={typeof item.submission_http_status === "number" ? String(item.submission_http_status) : "Not available"} />
+          <Fact label="Provider outcome" value={safeText(item.submission_outcome)} />
           <Fact label="Authoritative GET confirmation" value={safeText(item.authoritative_rfi_status || item.provider_status)} />
           <Fact label="Reconciliation timestamp" value={formatDate(item.reconciled_at)} />
-          <Fact label="Further reconciliation required" value={reconciliationRequired(item.manual_reconciliation_required)} />
+          <Fact label="Further reconciliation required" value={reconciliationRequired(item.reconciliation_required)} />
         </dl>
         <p className="mt-3 text-xs text-slate-500">Only bounded operational evidence is shown. Exact provider response content and transport identifiers are not available here.</p>
       </Block>
