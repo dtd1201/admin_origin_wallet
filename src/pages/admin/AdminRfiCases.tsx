@@ -33,9 +33,46 @@ const submissionStates: Array<AdminRfiSubmissionState | "all"> = ["all", "new", 
 const formatDate = (value?: string | null) => { if (!value) return "Not available"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "Not available" : new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date); };
 const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : "";
 const template = (item: AdminRfiCase) => item.evidence?.template && typeof item.evidence.template === "object" ? item.evidence.template as Record<string, unknown> : undefined;
-const requestName = (item: AdminRfiCase) => text(item.template_name) || text(template(item)?.name) || text(template(item)?.documentType) || text(item.evidence?.description) || `RFI request #${item.id}`;
-const remarks = (item: AdminRfiCase) => text(item.provider_remarks) || text(item.evidence?.remarks) || text(item.evidence?.description);
+const remarks = (item: AdminRfiCase) => text(item.evidence?.remarks) || text(item.provider_remarks) || text(item.evidence?.description);
 const fields = (item: AdminRfiCase) => { const value = template(item)?.requiredFields ?? item.evidence?.requiredData; return Array.isArray(value) ? value : []; };
+const fieldRecord = (value: unknown) => value && typeof value === "object" ? value as Record<string, unknown> : {};
+const fieldLabel = (value: unknown, index: number) => { const field = fieldRecord(value); return text(field.fieldLabel) || text(field.label) || text(field.question) || text(field.description) || `Required item ${index + 1}`; };
+const fieldKey = (value: unknown) => { const field = fieldRecord(value); return text(field.fieldValue) || text(field.value) || text(field.questionId); };
+const fieldType = (value: unknown) => { const field = fieldRecord(value); return text(field.type) || text(field.dataType) || "Not specified"; };
+const explicitRequestLabel = (item: AdminRfiCase) => {
+  const source = [text(item.template_name), text(template(item)?.name), text(template(item)?.documentType), ...fields(item).map((value, index) => fieldLabel(value, index)), remarks(item)].join(" ").toLowerCase();
+  if (source.includes("company source of funds") || source.includes("corporate source of wealth")) return "Corporate Source of Wealth & Source of Funds";
+  if (source.includes("personal source of wealth")) return "Personal Source of Wealth";
+  if (source.includes("personal source of funds")) return "Personal Source of Funds";
+  if (source.includes("business registration document") || source.includes("certificate of incorporation")) return "Certificate of Incorporation / Corporate Documents";
+  return "";
+};
+const humanize = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const requestName = (item: AdminRfiCase) => {
+  const explicit = explicitRequestLabel(item);
+  if (explicit) return explicit;
+  const providerName = text(item.template_name) || text(template(item)?.name) || text(template(item)?.documentType) || text(item.evidence?.description);
+  return providerName && !["otherdocument", "document"].includes(providerName.toLowerCase()) ? humanize(providerName) : `RFI request #${item.id}`;
+};
+const requestSubject = (item: AdminRfiCase) => {
+  const source = [requestName(item), ...fields(item).map((value, index) => fieldLabel(value, index)), remarks(item)].join(" ").toLowerCase();
+  if (/\bpersonal\b|\bindividual\b/.test(source)) return "Individual associated with the customer";
+  if (/\bcompany\b|\bcorporate\b|business registration|certificate of incorporation/.test(source)) return "Company";
+  return item.scope === "transaction" ? "Transaction" : "Subject not specified by provider";
+};
+const conciseRemarks = (value: string) => {
+  if (!value) return "No original Nium remarks were supplied.";
+  const firstLine = value.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || value;
+  const firstSentence = firstLine.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || firstLine;
+  return firstSentence.length > 220 ? `${firstSentence.slice(0, 217).trimEnd()}...` : firstSentence;
+};
+const remarkParts = (value: string) => {
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const expanded = lines.length === 1 ? lines[0].split(/\s+(?=\d+[.)]\s+)/).filter(Boolean) : lines;
+  const options = expanded.filter((line) => /^\d+[.)]\s+/.test(line)).map((line) => line.replace(/^\d+[.)]\s+/, ""));
+  const prose = expanded.filter((line) => !/^\d+[.)]\s+/.test(line));
+  return { prose, options };
+};
 const requiredDocumentCount = (item: AdminRfiCase) => item.required_document_count ?? fields(item).length;
 const customerName = (item: AdminRfiCase) => text(item.customer_name) || text(item.business_name) || text(item.legal_name) || text(item.customer?.business_name) || text(item.customer?.legal_name);
 const historical = (item: AdminRfiCase) => Boolean(item.origin && item.origin !== "authoritative_fetch");
@@ -65,6 +102,7 @@ const AdminRfiCases = () => {
   const [answers, setAnswers] = useState([{ questionId: "", answer: "" }]);
   const [revisionReason, setRevisionReason] = useState("");
   const [actionError, setActionError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
   const query = useMemo(() => { const params = new URLSearchParams({ page: String(page) }); if (search.trim()) params.set("search", search.trim()); if (scope !== "all") params.set("scope", scope); if (status.trim()) params.set("status", status.trim()); if (submissionState !== "all") params.set("submission_state", submissionState); return params.toString(); }, [page, scope, search, status, submissionState]);
@@ -82,8 +120,22 @@ const AdminRfiCases = () => {
       if (factualAnswers.some((answer) => !answer.questionId || !answer.answer)) throw new Error("Each response item requires a question ID and factual answer.");
       return saveAdminRfiDraft(item.id, { answers: factualAnswers }, token);
     },
-    onSuccess: async (updated) => { setActionError(""); setConfirmAction(null); setRevisionReason(""); await refresh(updated); },
-    onError: (error) => { setConfirmAction(null); setActionError(error instanceof Error ? error.message : "Unable to update the RFI request."); },
+    onSuccess: async (updated, variables) => {
+      const messages = {
+        send: "The RFI request was sent to the customer.",
+        revision: "The revision request was sent to the customer.",
+        "approve-user": "The customer submission was approved by Origin Wallet.",
+        "save-draft": "The factual response draft was saved.",
+        "approve-draft": "The factual response draft was approved.",
+        "submit-provider": "The approved response was submitted to Nium.",
+      };
+      setActionError("");
+      setActionSuccess(messages[variables.action]);
+      setConfirmAction(null);
+      setRevisionReason("");
+      await refresh(updated);
+    },
+    onError: (error) => { setConfirmAction(null); setActionSuccess(""); setActionError(error instanceof Error ? error.message : "Unable to update the RFI request."); },
   });
 
   const rows = casesQuery.data?.data ?? [];
@@ -96,7 +148,7 @@ const AdminRfiCases = () => {
     return map;
   }, new Map<string, AdminRfiCase[]>()));
   const selected = detailQuery.data ?? null;
-  const inspect = (item: AdminRfiCase) => { if (historical(item)) return; setSelectedId(item.id); setAnswers([{ questionId: "", answer: "" }]); setRevisionReason(""); setActionError(""); };
+  const inspect = (item: AdminRfiCase) => { if (historical(item)) return; setSelectedId(item.id); setAnswers([{ questionId: "", answer: "" }]); setRevisionReason(""); setActionError(""); setActionSuccess(""); };
   const preview = async (url?: string | null) => { if (!url) return; try { const blob = await requestApiBlob(url, { token }); const objectUrl = URL.createObjectURL(blob); window.open(objectUrl, "_blank", "noopener,noreferrer"); window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000); } catch (error) { setActionError(error instanceof Error ? error.message : "Unable to open the authenticated document preview."); } };
   if (!token) return <main className="p-4 sm:p-6 lg:p-8"><State role="alert" icon={ShieldAlert} title="Permission required" message="An active Admin session is required to access provider RFI cases." /></main>;
 
@@ -143,6 +195,7 @@ const AdminRfiCases = () => {
             revisionReason={revisionReason}
             setRevisionReason={setRevisionReason}
             error={actionError}
+            success={actionSuccess}
             pending={mutation.isPending}
             act={(action) => mutation.mutate({ action, item: selected })}
             preview={preview}
@@ -186,33 +239,209 @@ const AdminRfiCases = () => {
   </main>;
 };
 
-const RequestCard = ({ item, inspect }: { item: AdminRfiCase; inspect: () => void }) => <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{item.scope === "customer" ? "Customer RFI" : "Transaction RFI"} · Case #{item.id}</div><h3 className="mt-1 break-words text-lg font-semibold">{requestName(item)}</h3></div><Badge className="w-fit shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-100">{labels[item.submission_state] || "Status unavailable"}</Badge></div><p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-600">{remarks(item) || "No original Nium remarks were supplied."}</p><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3"><Fact label="Scope" value={item.scope === "customer" ? "Customer" : "Transaction"} /><Fact label="Required" value={`${requiredDocumentCount(item)} item(s)`} /><Fact label="Updated" value={formatDate(item.updated_at)} /></dl><div className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950"><b>Next:</b> {nextAction(item)}</div><div className="mt-4 flex justify-end"><Button variant="ghost" onClick={inspect}>Inspect request<ChevronRight className="h-4 w-4" /></Button></div></article>;
+const RequestCard = ({ item, inspect }: { item: AdminRfiCase; inspect: () => void }) => (
+  <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+          {item.scope === "customer" ? "Customer RFI" : "Transaction RFI"} · Case #{item.id}
+        </div>
+        <h3 className="mt-2 break-words text-xl font-semibold leading-7 text-slate-950">{requestName(item)}</h3>
+        <p className="mt-1 text-sm font-medium text-slate-500">Subject: {requestSubject(item)}</p>
+      </div>
+      <Badge className="w-fit shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
+        {labels[item.submission_state] || "Status unavailable"}
+      </Badge>
+    </div>
 
-const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReason, error, pending, act, preview, confirm }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; error: string; pending: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; preview: (url?: string | null) => void; confirm: (action: ConfirmAction) => void }) => {
+    <div className="mt-4 border-l-2 border-amber-300 pl-3">
+      <div className="text-xs font-semibold uppercase tracking-wider text-amber-800">Nium request summary</div>
+      <p className="mt-1 text-sm leading-6 text-slate-700">{conciseRemarks(remarks(item))}</p>
+    </div>
+
+    <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+      <Fact label="Required information" value={requiredDocumentCount(item) ? `${requiredDocumentCount(item)} provider-defined item(s)` : "Not summarized in list response"} />
+      <Fact label="Last updated" value={formatDate(item.updated_at)} />
+    </dl>
+
+    <div className="mt-auto pt-5">
+      <div className="rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-950">
+        <div className="text-xs font-semibold uppercase tracking-wider text-amber-800">Next permitted step</div>
+        <div className="mt-1 font-medium">{nextAction(item)}</div>
+      </div>
+      <Button className="mt-3 w-full sm:w-auto" variant="outline" onClick={inspect}>
+        View details
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  </article>
+);
+
+const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReason, error, success, pending, act, preview, confirm }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; error: string; success: string; pending: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; preview: (url?: string | null) => void; confirm: (action: ConfirmAction) => void }) => {
   const required = fields(item);
+  const documentFields = required.filter((value) => /document|file|evidence/i.test(`${fieldType(value)} ${fieldKey(value)}`));
+  const informationFields = required.filter((value) => !documentFields.includes(value));
+  const providerText = remarks(item);
+  const parsedRemarks = remarkParts(providerText);
+  const recordedAnswers = item.response_draft ?? [];
+  const answeredKeys = new Set(recordedAnswers.map((answer) => answer.questionId).filter(Boolean));
+  const missingInformation = informationFields.filter((value) => fieldKey(value) && !answeredKeys.has(fieldKey(value)));
   const canDraft = item.status === "requested" && ["not_claimed", "draft"].includes(item.submission_state);
   const canApprove = item.status === "requested" && item.submission_state === "draft";
   const canSubmit = item.status === "requested" && ["approved", "admin_approved", "nium_submission_failed"].includes(item.submission_state) && item.contract_gate !== "provider_contract_unconfirmed";
   const review = ["user_submitted", "admin_review"].includes(item.submission_state);
-  return <div className="space-y-7 px-5 py-6 sm:px-8"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-sm text-slate-500">{customerName(item) || "Customer identity unavailable"}</div><div className="mt-1 flex flex-wrap gap-2"><Badge variant="secondary">{item.scope === "customer" ? "Customer scope" : "Transaction scope"}</Badge><Badge variant="outline">{labels[item.submission_state] || "Status unavailable"}</Badge></div></div><div className="text-sm text-slate-500">Updated {formatDate(item.updated_at)}</div></div><Lifecycle item={item} />
-    <Block title="Nium Request" icon={MessageSquareText}><div className="rounded-xl bg-amber-50 p-4"><div className="text-xs font-semibold uppercase tracking-wider text-amber-800">Original Nium remarks</div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">{remarks(item) || "No original provider remarks were supplied."}</p></div><dl className="mt-3 grid gap-3 sm:grid-cols-3"><Fact label="Category / template" value={requestName(item)} /><Fact label="Scope" value={item.scope === "customer" ? "Customer" : "Transaction"} /><Fact label="Next action" value={nextAction(item)} /></dl></Block>
-    <Block title="Required Documents" icon={FileCheck2}>{required.length ? <div className="grid gap-2 sm:grid-cols-2">{required.map((value, index) => { const record = value && typeof value === "object" ? value as Record<string, unknown> : {}; return <div key={index} className="rounded-xl border p-4"><div className="font-medium">{text(record.fieldLabel) || text(record.description) || `Required item ${index + 1}`}</div><div className="mt-1 text-sm text-slate-500">{text(record.type) || text(record.fieldValue) || "Supporting information"}</div></div>; })}</div> : <Unavailable message="No document requirements were supplied by the provider." />}</Block>
-    <Block title="Attached Documents" icon={FileText}>{item.documents?.length ? <div className="space-y-2">{item.documents.map((document) => <button key={document.id} type="button" disabled={!document.file_url} onClick={() => preview(document.file_url)} className="flex w-full items-center justify-between rounded-xl border p-4 text-left hover:border-emerald-300 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"><div className="min-w-0"><div className="truncate font-medium">{document.original_name || "Supporting document"}</div><div className="text-xs text-slate-500">Authenticated private preview · {document.status || "Status unavailable"}</div></div><ChevronRight className="h-4 w-4" /></button>)}</div> : <Unavailable message={`No attached documents are exposed for this case${item.supporting_file_count ? ` (${item.supporting_file_count} file reference(s) recorded)` : ""}.`} />}</Block>
-    <Block title="Customer Communication" icon={MessageSquareText}><div className="grid gap-3 md:grid-cols-2"><Info title="Customer explanation" value={item.user_explanation || "No explanation has been provided."} /><Info title="Latest revision request" value={item.revision_reason || "No revision has been requested."} /></div>{["new", "revision_requested"].includes(item.submission_state) ? <div className="mt-4 flex justify-end"><Button disabled={pending} onClick={() => act("send")}><Send className="h-4 w-4" />Send to Customer</Button></div> : null}</Block>
-    <Block title="Review & Submission History" icon={History}>{item.history?.length ? <ol className="space-y-3">{item.history.map((event, index) => <li key={index} className="border-l-2 border-emerald-200 pl-4 text-sm"><b>{labels[event.to_state || ""] || event.event_type}</b><div className="mt-1 text-slate-500">{formatDate(event.created_at)}</div></li>)}</ol> : <Unavailable message="No review or submission history is available for this request." />}{item.response_draft?.length ? <div className="mt-4 space-y-2"><div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Recorded factual responses</div>{item.response_draft.map((answer, index) => <div key={`${answer.questionId || "response"}-${index}`} className="rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium">{answer.questionId || `Response ${index + 1}`}</div><div className="mt-1 whitespace-pre-wrap text-slate-600">{typeof answer.answer === "string" || typeof answer.answer === "number" || typeof answer.answer === "boolean" ? String(answer.answer) : "Structured factual response recorded"}</div></div>)}</div> : null}</Block>
-    {review ? <section className="rounded-2xl border p-5"><h3 className="font-semibold">Admin review decision</h3><p className="mt-1 text-sm text-slate-600">Customer submission is held by Origin Wallet until an Admin approves it. Approval does not submit to Nium.</p><Label htmlFor="revision-reason" className="mt-4 block">Revision reason</Label><Textarea id="revision-reason" className="mt-2" value={revisionReason} onChange={(event) => setRevisionReason(event.target.value)} placeholder="Explain what the customer must correct" /><div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!revisionReason.trim() || pending} onClick={() => act("revision")}>Request Revision</Button><Button disabled={pending} onClick={() => act("approve-user")}>Approve Customer Submission</Button></div></section> : null}
-    {canDraft || item.submission_state === "approved" ? <section className="rounded-2xl border bg-slate-50 p-5"><h3 className="font-semibold">Admin factual response</h3><p className="mt-1 text-sm text-slate-600">Use explicit question IDs and factual answers returned by the backend workflow.</p><div className="mt-4 space-y-3">{answers.map((answer, index) => <div key={index} className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-[0.7fr_1.3fr]"><div><Label htmlFor={`question-${index}`}>Question ID</Label><Input id={`question-${index}`} className="mt-2" disabled={!canDraft || pending} value={answer.questionId} onChange={(event) => setAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? { ...value, questionId: event.target.value } : value))} /></div><div><Label htmlFor={`answer-${index}`}>Factual answer</Label><Textarea id={`answer-${index}`} className="mt-2 min-h-10" disabled={!canDraft || pending} value={answer.answer} onChange={(event) => setAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? { ...value, answer: event.target.value } : value))} /></div></div>)}</div><div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!canDraft || pending} onClick={() => act("save-draft")}>Save Draft</Button><Button disabled={!canApprove || pending} onClick={() => confirm("approve-draft")}>Approve Draft</Button></div></section> : null}
-    <section className="rounded-2xl border bg-slate-50 p-5"><div className="flex items-center gap-2 font-semibold"><ShieldAlert className="h-4 w-4 text-amber-600" />Provider submission control</div><p className="mt-2 text-sm text-slate-600">Customer submission sends information to Origin Wallet for review. It does not submit anything to Nium.</p>{item.contract_gate === "provider_contract_unconfirmed" ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">Provider POST is blocked: the exact Nium contract remains unconfirmed.</div> : null}<div className="mt-4 flex justify-end"><Button disabled={!canSubmit || pending} onClick={() => confirm("submit-provider")}><Send className="h-4 w-4" />Submit Approved Response to Nium</Button></div></section>
-    {error ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div> : null}
-    <details className="rounded-xl border p-4 text-sm"><summary className="cursor-pointer font-medium focus-visible:ring-2 focus-visible:ring-emerald-500">Technical Diagnostics</summary><dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Diagnostic label="Case ID" value={String(item.id)} /><Diagnostic label="Raw provider status" value={item.status} /><Diagnostic label="Raw workflow state" value={item.submission_state} /><Diagnostic label="Origin" value={item.origin || "Not supplied"} /><Diagnostic label="Contract gate" value={item.contract_gate} /><Diagnostic label="Reconciled" value={formatDate(item.reconciled_at)} /></dl></details>
-  </div>;
+
+  return (
+    <div className="space-y-8 px-5 py-6 pb-10 sm:px-8">
+      <section aria-labelledby="request-overview-title" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Request overview</div>
+            <h2 id="request-overview-title" className="mt-2 text-2xl font-semibold leading-8 text-slate-950">{requestName(item)}</h2>
+            <p className="mt-1 text-sm text-slate-600">{customerName(item) || "Customer identity unavailable"} · {requestSubject(item)}</p>
+          </div>
+          <Badge variant="outline">{labels[item.submission_state] || "Status unavailable"}</Badge>
+        </div>
+        <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Fact label="Case" value={`#${item.id}`} />
+          <Fact label="Origin" value={item.origin === "authoritative_fetch" ? "Authoritative provider fetch" : item.origin || "Not supplied"} />
+          <Fact label="Provider status" value={item.status} />
+          <Fact label="Last updated" value={formatDate(item.updated_at)} />
+        </dl>
+      </section>
+
+      <Lifecycle item={item} />
+
+      <Block title="Original Nium Request" icon={MessageSquareText}>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-amber-800">Provider-authored text</div>
+          {providerText ? <RemarkContent prose={parsedRemarks.prose} options={parsedRemarks.options} /> : <p className="mt-3 text-sm text-amber-950">No original provider remarks were supplied.</p>}
+        </div>
+      </Block>
+
+      <Block title="Required Information" icon={FileCheck2}>
+        {informationFields.length ? (
+          <div className="space-y-3">
+            {informationFields.map((value, index) => <RequirementCard key={`${fieldKey(value) || "information"}-${index}`} value={value} index={index} answered={answeredKeys.has(fieldKey(value))} />)}
+          </div>
+        ) : <Unavailable message={required.length ? "The provider schema contains document requirements but no separate information questions." : "No structured information fields were supplied by the provider."} />}
+      </Block>
+
+      <Block title="Required / Accepted Documents" icon={FileText}>
+        {documentFields.length ? <div className="space-y-3">{documentFields.map((value, index) => <RequirementCard key={`${fieldKey(value) || "document"}-${index}`} value={value} index={index} answered={Boolean(item.documents?.length)} />)}</div> : null}
+        {parsedRemarks.options.length ? (
+          <div className={`${documentFields.length ? "mt-4" : ""} rounded-2xl border border-slate-200 bg-slate-50 p-5`}>
+            <div className="font-semibold text-slate-900">{/one of/i.test(providerText) ? "Provide one of the following" : /all of/i.test(providerText) ? "Provide all listed documents" : "Provider-listed document options"}</div>
+            {!/one of|all of/i.test(providerText) ? <p className="mt-1 text-xs text-slate-500">The API does not specify whether these alternatives are cumulative or optional.</p> : null}
+            <ol className="mt-3 space-y-2 pl-5 text-sm leading-6 text-slate-700">{parsedRemarks.options.map((option, index) => <li key={`${option}-${index}`} className="list-decimal pl-1">{option}</li>)}</ol>
+          </div>
+        ) : null}
+        {!documentFields.length && !parsedRemarks.options.length ? <Unavailable message="No structured document list was supplied. Refer to the original Nium request without inferring additional requirements." /> : null}
+      </Block>
+
+      <Block title="Customer Response" icon={UserRoundCheck}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 p-5">
+            <div className="font-semibold text-slate-900">Provided answers</div>
+            {recordedAnswers.length ? <div className="mt-3 space-y-3">{recordedAnswers.map((answer, index) => <div key={`${answer.questionId || "response"}-${index}`} className="rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium text-slate-900">{answer.questionId || `Response ${index + 1}`}</div><div className="mt-1 whitespace-pre-wrap leading-6 text-slate-600">{factualAnswer(answer.answer)}</div></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No customer or Admin factual answers are recorded.</p>}
+            <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium text-slate-900">Customer explanation</div><div className="mt-1 whitespace-pre-wrap text-slate-600">{item.user_explanation || "No explanation has been provided."}</div></div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 p-5">
+            <div className="font-semibold text-slate-900">Uploaded evidence</div>
+            {item.documents?.length ? <div className="mt-3 space-y-2">{item.documents.map((document) => <button key={document.id} type="button" disabled={!document.file_url} onClick={() => preview(document.file_url)} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-4 text-left hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"><div className="min-w-0"><div className="truncate font-medium text-slate-900">{document.original_name || "Supporting document"}</div><div className="mt-1 text-xs text-slate-500">{document.type ? `${humanize(document.type)} · ` : ""}{document.status || "Status unavailable"} · Authenticated preview</div></div><ChevronRight className="h-4 w-4 shrink-0" /></button>)}</div> : <p className="mt-3 text-sm text-slate-500">No uploaded evidence is exposed for this case.</p>}
+          </div>
+        </div>
+      </Block>
+
+      <Block title="Admin Review" icon={ShieldAlert}>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ReviewMetric label="Answers" value={recordedAnswers.length ? `${recordedAnswers.length} recorded` : "Missing"} warning={!recordedAnswers.length} />
+            <ReviewMetric label="Evidence" value={item.documents?.length ? `${item.documents.length} attached` : "None attached"} warning={Boolean(documentFields.length && !item.documents?.length)} />
+            <ReviewMetric label="Structured gaps" value={missingInformation.length ? `${missingInformation.length} unanswered` : informationFields.length ? "No detected gaps" : "Not measurable"} warning={missingInformation.length > 0} />
+          </div>
+          {item.revision_reason ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><div className="font-semibold">Latest revision reason</div><div className="mt-1 whitespace-pre-wrap">{item.revision_reason}</div></div> : null}
+        </div>
+      </Block>
+
+      <Block title="Workflow History" icon={History}>
+        {item.history?.length ? <ol className="space-y-3">{item.history.map((event, index) => <li key={`${event.event_type}-${index}`} className="border-l-2 border-emerald-200 pl-4 text-sm"><div className="font-medium text-slate-900">{labels[event.to_state || ""] || humanize(event.event_type)}</div><div className="mt-1 text-slate-500">{event.from_state ? `${labels[event.from_state] || humanize(event.from_state)} → ` : ""}{formatDate(event.created_at)}</div></li>)}</ol> : <Unavailable message="No workflow history events were returned by the API." />}
+        <p className="mt-3 text-xs text-slate-500">Customer submission records delivery to Origin Wallet. It is separate from an actual provider submission to Nium.</p>
+      </Block>
+
+      <section aria-labelledby="workflow-actions-title" className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div><h3 id="workflow-actions-title" className="font-semibold text-slate-950">Workflow actions</h3><p className="mt-1 text-sm text-slate-600">{nextAction(item)}</p></div>
+          <WorkflowActions item={item} answers={answers} setAnswers={setAnswers} revisionReason={revisionReason} setRevisionReason={setRevisionReason} pending={pending} review={review} canDraft={canDraft} canApprove={canApprove} canSubmit={canSubmit} act={act} confirm={confirm} />
+        </div>
+        {success ? <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{success}</div> : null}
+        {error ? <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
+      </section>
+
+      <details className="rounded-xl border border-slate-200 p-4 text-sm">
+        <summary className="cursor-pointer font-medium text-slate-900 focus-visible:ring-2 focus-visible:ring-emerald-500">Technical Diagnostics</summary>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Diagnostic label="Case ID" value={String(item.id)} /><Diagnostic label="Raw provider status" value={item.status} /><Diagnostic label="Raw workflow state" value={item.submission_state} /><Diagnostic label="Origin" value={item.origin || "Not supplied"} /><Diagnostic label="Contract gate" value={item.contract_gate} /><Diagnostic label="Reconciled" value={formatDate(item.reconciled_at)} /></dl>
+      </details>
+    </div>
+  );
 };
+
+const RemarkContent = ({ prose, options }: { prose: string[]; options: string[] }) => (
+  <div className="mt-3 space-y-3 text-sm leading-7 text-amber-950">
+    {prose.map((line, index) => <p key={`${line}-${index}`} className="whitespace-pre-wrap">{line}</p>)}
+    {options.length ? <ol className="space-y-2 pl-5">{options.map((option, index) => <li key={`${option}-${index}`} className="list-decimal pl-1">{option}</li>)}</ol> : null}
+  </div>
+);
+
+const RequirementCard = ({ value, index, answered }: { value: unknown; index: number; answered: boolean }) => {
+  const field = fieldRecord(value);
+  const required = typeof field.required === "boolean" ? field.required : typeof field.optional === "boolean" ? !field.optional : null;
+  const choices = [field.choices, field.options, field.allowedValues].find(Array.isArray) as unknown[] | undefined;
+  const question = text(field.question) || text(field.instructions) || text(field.description);
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Requirement {index + 1}</div>
+          <h4 className="mt-1 font-semibold leading-6 text-slate-950">{fieldLabel(value, index)}</h4>
+        </div>
+        <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${answered ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{answered ? "Response available" : "No matching response"}</span>
+      </div>
+      {question && question !== fieldLabel(value, index) ? <p className="mt-3 text-sm leading-6 text-slate-700">{question}</p> : null}
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+        <Fact label="Response key" value={fieldKey(value) || "Not supplied"} />
+        <Fact label="Type" value={humanize(fieldType(value))} />
+        <Fact label="Requirement" value={required === true ? "Mandatory" : required === false ? "Optional" : "Not specified by provider"} />
+      </dl>
+      {choices?.length ? <div className="mt-4"><div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Provider choices</div><ul className="mt-2 grid gap-2 sm:grid-cols-2">{choices.map((choice, choiceIndex) => <li key={choiceIndex} className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{typeof choice === "object" ? text(fieldRecord(choice).label) || text(fieldRecord(choice).value) || "Structured option" : String(choice)}</li>)}</ul></div> : null}
+    </article>
+  );
+};
+
+const factualAnswer = (value: unknown) => typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : "Structured factual response recorded";
+
+const ReviewMetric = ({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) => (
+  <div className={`rounded-xl border p-4 ${warning ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+    <div className={`text-xs font-semibold uppercase tracking-wider ${warning ? "text-amber-700" : "text-emerald-700"}`}>{label}</div>
+    <div className="mt-1 font-medium text-slate-900">{value}</div>
+  </div>
+);
+
+const WorkflowActions = ({ item, answers, setAnswers, revisionReason, setRevisionReason, pending, review, canDraft, canApprove, canSubmit, act, confirm }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; pending: boolean; review: boolean; canDraft: boolean; canApprove: boolean; canSubmit: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; confirm: (action: ConfirmAction) => void }) => (
+  <div className="w-full space-y-3 xl:max-w-2xl">
+    {["new", "revision_requested"].includes(item.submission_state) ? <Button className="w-full sm:w-auto" disabled={pending} onClick={() => act("send")}><Send className="h-4 w-4" />{pending ? "Sending..." : "Send request to customer"}</Button> : null}
+    {review ? <div className="rounded-xl border border-slate-200 p-4"><Label htmlFor="revision-reason">Revision reason</Label><Textarea id="revision-reason" className="mt-2" value={revisionReason} onChange={(event) => setRevisionReason(event.target.value)} placeholder="Explain exactly what the customer must correct" /><div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!revisionReason.trim() || pending} onClick={() => act("revision")}>Request revision</Button><Button disabled={pending} onClick={() => act("approve-user")}>Approve customer submission</Button></div><p className="mt-3 text-xs text-slate-500">Origin Wallet approval does not submit this request to Nium.</p></div> : null}
+    {canDraft || item.submission_state === "approved" ? <div className="rounded-xl border border-slate-200 p-4"><div className="font-medium text-slate-900">Admin factual response</div><div className="mt-3 space-y-3">{answers.map((answer, index) => <div key={index} className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor={`question-${index}`}>Question ID</Label><Input id={`question-${index}`} className="mt-1" disabled={!canDraft || pending} value={answer.questionId} onChange={(event) => setAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? { ...value, questionId: event.target.value } : value))} /></div><div><Label htmlFor={`answer-${index}`}>Factual answer</Label><Textarea id={`answer-${index}`} className="mt-1 min-h-10" disabled={!canDraft || pending} value={answer.answer} onChange={(event) => setAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? { ...value, answer: event.target.value } : value))} /></div></div>)}</div><div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end"><Button variant="outline" disabled={!canDraft || pending} onClick={() => act("save-draft")}>Save factual draft</Button><Button disabled={!canApprove || pending} onClick={() => confirm("approve-draft")}>Approve factual draft</Button></div></div> : null}
+    {["approved", "admin_approved", "nium_submission_failed"].includes(item.submission_state) ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="font-medium text-amber-950">Nium submission</div><p className="mt-1 text-sm text-amber-900">{item.contract_gate === "provider_contract_unconfirmed" ? "Blocked because the exact Corporate RFI provider contract remains unconfirmed." : "The backend reports that provider submission is available after confirmation."}</p><Button className="mt-3 w-full sm:w-auto" disabled={!canSubmit || pending} onClick={() => confirm("submit-provider")}><Send className="h-4 w-4" />Submit approved response to Nium</Button></div> : null}
+    {!needsAction(item.submission_state) ? <div className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600">No state-changing Admin action is available for the current backend workflow state.</div> : null}
+  </div>
+);
 
 const Lifecycle = ({ item }: { item: AdminRfiCase }) => <div aria-label="RFI lifecycle" className="rounded-2xl bg-slate-950 p-3 sm:p-4"><div className="grid grid-cols-5 gap-1">{steps.map(([label, Icon], index) => <div key={label} className="min-w-0 text-center"><div className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full ${index <= (stepByState[item.submission_state] ?? 0) ? "bg-emerald-400 text-slate-950" : "bg-slate-800 text-slate-500"}`}><Icon className="h-4 w-4" /></div><div className="mt-2 break-words text-[9px] leading-3 text-slate-200 sm:text-[11px]">{label}</div></div>)}</div></div>;
 const Metric = ({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) => <div className={`rounded-xl border p-3 ${accent ? "border-amber-300/30 bg-amber-300/10" : "border-white/10 bg-white/5"}`}><div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div><div className={`mt-1 text-xl font-semibold ${accent ? "text-amber-200" : "text-white"}`}>{value}</div></div>;
 const Fact = ({ label, value }: { label: string; value: string }) => <div className="min-w-0"><dt className="text-xs uppercase tracking-wider text-slate-400">{label}</dt><dd className="mt-1 break-words font-medium text-slate-800">{value}</dd></div>;
 const Block = ({ title, icon: Icon, children }: { title: string; icon: typeof FileText; children: ReactNode }) => <section><div className="mb-3 flex items-center gap-2"><Icon className="h-4 w-4 text-emerald-700" /><h3 className="font-semibold">{title}</h3></div>{children}</section>;
-const Info = ({ title, value }: { title: string; value: string }) => <div className="rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium">{title}</div><div className="mt-2 whitespace-pre-wrap text-slate-600">{value}</div></div>;
 const Diagnostic = ({ label, value }: { label: string; value: string }) => <div><dt className="text-xs uppercase tracking-wider text-slate-400">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>;
 const Unavailable = ({ message }: { message: string }) => <div className="rounded-xl border border-dashed p-5 text-sm text-slate-500">{message}</div>;
 const State = ({ title, message, icon: Icon, role, action }: { title: string; message: string; icon: typeof Inbox; role?: "alert"; action?: ReactNode }) => <section role={role} className="rounded-2xl border border-dashed bg-slate-50 p-8 text-center"><Icon className="mx-auto h-7 w-7 text-slate-400" /><h2 className="mt-3 font-semibold">{title}</h2><p className="mx-auto mt-1 max-w-xl text-sm text-slate-500">{message}</p>{action ? <div className="mt-4">{action}</div> : null}</section>;

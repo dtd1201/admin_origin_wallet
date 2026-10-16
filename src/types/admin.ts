@@ -191,7 +191,7 @@ export interface AdminRfiCase {
   sent_to_user_at?: string | null;
   user_submitted_at?: string | null;
   admin_reviewed_at?: string | null;
-  documents?: Array<{ id: number; original_name?: string | null; mime_type?: string | null; file_size?: number | null; file_url?: string | null; status?: string | null }>;
+  documents?: Array<{ id: number; type?: string | null; original_name?: string | null; mime_type?: string | null; file_size?: number | null; file_url?: string | null; status?: string | null }>;
   history?: Array<{ event_type: string; from_state?: string | null; to_state?: string | null; created_at?: string | null }>;
   created_at?: string | null;
   updated_at?: string | null;
