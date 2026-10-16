@@ -40,6 +40,28 @@ const fieldRecord = (value: unknown) => value && typeof value === "object" ? val
 const fieldLabel = (value: unknown, index: number) => { const field = fieldRecord(value); return text(field.fieldLabel) || text(field.label) || text(field.question) || text(field.description) || `Required item ${index + 1}`; };
 const fieldKey = (value: unknown) => { const field = fieldRecord(value); return text(field.fieldValue) || text(field.value) || text(field.questionId); };
 const fieldType = (value: unknown) => { const field = fieldRecord(value); return text(field.type) || text(field.dataType) || "Not specified"; };
+type RequirementKind = "document" | "information" | "unknown";
+const requirementKind = (value: unknown): RequirementKind => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "unknown";
+  const key = fieldKey(value).toLowerCase();
+  const type = fieldType(value).toLowerCase();
+  if (!key || type === "not specified") return "unknown";
+  if (/document|file|evidence|attachment/.test(`${type} ${key}`)) return "document";
+  if (/text|string|textarea|number|boolean|select|choice|date|email|url/.test(type)) return "information";
+  return "unknown";
+};
+const requirementAnalysis = (item: AdminRfiCase) => {
+  const required = fields(item);
+  const documentFields = required.filter((value) => requirementKind(value) === "document");
+  const informationFields = required.filter((value) => requirementKind(value) === "information");
+  const unknownFields = required.filter((value) => requirementKind(value) === "unknown");
+  return { required, documentFields, informationFields, unknownFields };
+};
+const providerStatusLabel = (item: AdminRfiCase) => item.provider_status === "RFI_RESPONDED" && item.status === "responded_under_review"
+  ? "RFI Responded — Under Compliance Review"
+  : item.provider_status || "Not available";
+const safeText = (value?: string | null) => text(value) || "Not available";
+const reconciliationRequired = (value?: boolean | null) => value === true ? "Yes" : value === false ? "No" : "Not available";
 const explicitRequestLabel = (item: AdminRfiCase) => {
   const source = [text(item.template_name), text(template(item)?.name), text(template(item)?.documentType), ...fields(item).map((value, index) => fieldLabel(value, index)), remarks(item)].join(" ").toLowerCase();
   if (source.includes("company source of funds") || source.includes("corporate source of wealth")) return "Corporate Source of Wealth & Source of Funds";
@@ -287,14 +309,21 @@ const RequestCard = ({ item, inspect }: { item: AdminRfiCase; inspect: () => voi
 );
 
 const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReason, error, success, pending, act, preview, confirm, refreshStatus }: { item: AdminRfiCase; answers: Array<{ questionId: string; answer: string }>; setAnswers: Dispatch<SetStateAction<Array<{ questionId: string; answer: string }>>>; revisionReason: string; setRevisionReason: (value: string) => void; error: string; success: string; pending: boolean; act: (action: "send" | "revision" | "approve-user" | "save-draft") => void; preview: (url?: string | null) => void; confirm: (action: ConfirmAction) => void; refreshStatus: () => void }) => {
-  const required = fields(item);
-  const documentFields = required.filter((value) => /document|file|evidence/i.test(`${fieldType(value)} ${fieldKey(value)}`));
-  const informationFields = required.filter((value) => !documentFields.includes(value));
+  const { required, documentFields, informationFields, unknownFields } = requirementAnalysis(item);
   const providerText = remarks(item);
   const parsedRemarks = remarkParts(providerText);
   const recordedAnswers = item.response_draft ?? [];
   const answeredKeys = new Set(recordedAnswers.map((answer) => answer.questionId).filter(Boolean));
   const missingInformation = informationFields.filter((value) => fieldKey(value) && !answeredKeys.has(fieldKey(value)));
+  const answersValue = unknownFields.length
+    ? "Unverified"
+    : informationFields.length === 0 && documentFields.length > 0
+      ? "Not required"
+      : missingInformation.length > 0
+        ? "Missing"
+        : informationFields.length > 0
+          ? `${informationFields.length} complete`
+          : "Not available";
   const canDraft = item.status === "requested" && ["not_claimed", "draft"].includes(item.submission_state);
   const canApprove = item.status === "requested" && item.submission_state === "draft";
   const canSubmit = item.submission_eligible === true;
@@ -314,7 +343,9 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
         <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="Case" value={`#${item.id}`} />
           <Fact label="Origin" value={item.origin === "authoritative_fetch" ? "Authoritative provider fetch" : item.origin || "Not supplied"} />
-          <Fact label="Provider status" value={item.provider_status || item.status} />
+          <Fact label="Provider RFI status" value={providerStatusLabel(item)} />
+          <Fact label="Origin Wallet state" value={labels[item.submission_state] || humanize(item.submission_state)} />
+          <Fact label="Business status" value={humanize(item.status)} />
           <Fact label="Last updated" value={formatDate(item.updated_at)} />
         </dl>
       </section>
@@ -333,7 +364,7 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
           <div className="space-y-3">
             {informationFields.map((value, index) => <RequirementCard key={`${fieldKey(value) || "information"}-${index}`} value={value} index={index} answered={answeredKeys.has(fieldKey(value))} />)}
           </div>
-        ) : <Unavailable message={required.length ? "The provider schema contains document requirements but no separate information questions." : "No structured information fields were supplied by the provider."} />}
+        ) : <Unavailable message={unknownFields.length ? "The provider requirements could not be safely classified. Answer requirements remain unverified." : required.length ? "Document-only request. No structured textual answers are required." : "No structured information fields were supplied by the provider."} />}
       </Block>
 
       <Block title="Required / Accepted Documents" icon={FileText}>
@@ -345,14 +376,14 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
             <ol className="mt-3 space-y-2 pl-5 text-sm leading-6 text-slate-700">{parsedRemarks.options.map((option, index) => <li key={`${option}-${index}`} className="list-decimal pl-1">{option}</li>)}</ol>
           </div>
         ) : null}
-        {!documentFields.length && !parsedRemarks.options.length ? <Unavailable message="No structured document list was supplied. Refer to the original Nium request without inferring additional requirements." /> : null}
+        {!documentFields.length && !parsedRemarks.options.length ? <Unavailable message={unknownFields.length ? "The provider requirements are malformed or unrecognized; document requirements cannot be verified." : "No structured document list was supplied. Refer to the original Nium request without inferring additional requirements."} /> : null}
       </Block>
 
       <Block title="Customer Response" icon={UserRoundCheck}>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 p-5">
             <div className="font-semibold text-slate-900">Provided answers</div>
-            {recordedAnswers.length ? <div className="mt-3 space-y-3">{recordedAnswers.map((answer, index) => <div key={`${answer.questionId || "response"}-${index}`} className="rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium text-slate-900">{answer.questionId || `Response ${index + 1}`}</div><div className="mt-1 whitespace-pre-wrap leading-6 text-slate-600">{factualAnswer(answer.answer)}</div></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No customer or Admin factual answers are recorded.</p>}
+            {recordedAnswers.length ? <div className="mt-3 space-y-3">{recordedAnswers.map((answer, index) => <div key={`${answer.questionId || "response"}-${index}`} className="rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium text-slate-900">{answer.questionId || `Response ${index + 1}`}</div><div className="mt-1 whitespace-pre-wrap leading-6 text-slate-600">{factualAnswer(answer.answer)}</div></div>)}</div> : <p className="mt-3 text-sm text-slate-500">{informationFields.length === 0 && documentFields.length > 0 && unknownFields.length === 0 ? "Structured answers are not required for this document-only request." : "No customer or Admin factual answers are recorded."}</p>}
             <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm"><div className="font-medium text-slate-900">Customer explanation</div><div className="mt-1 whitespace-pre-wrap text-slate-600">{item.user_explanation || "No explanation has been provided."}</div></div>
           </div>
           <div className="rounded-2xl border border-slate-200 p-5">
@@ -365,9 +396,9 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
       <Block title="Admin Review" icon={ShieldAlert}>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
           <div className="grid gap-3 sm:grid-cols-3">
-            <ReviewMetric label="Answers" value={recordedAnswers.length ? `${recordedAnswers.length} recorded` : "Missing"} warning={!recordedAnswers.length} />
+            <ReviewMetric label="Answers" value={answersValue} warning={answersValue === "Missing" || answersValue === "Unverified"} />
             <ReviewMetric label="Evidence" value={item.documents?.length ? `${item.documents.length} attached` : "None attached"} warning={Boolean(documentFields.length && !item.documents?.length)} />
-            <ReviewMetric label="Structured gaps" value={missingInformation.length ? `${missingInformation.length} unanswered` : informationFields.length ? "No detected gaps" : "Not measurable"} warning={missingInformation.length > 0} />
+            <ReviewMetric label="Structured gaps" value={unknownFields.length ? "Requirements unverified" : missingInformation.length ? `${missingInformation.length} unanswered` : informationFields.length ? "No detected gaps" : "Not applicable"} warning={missingInformation.length > 0 || unknownFields.length > 0} />
           </div>
           {item.revision_reason ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><div className="font-semibold">Latest revision reason</div><div className="mt-1 whitespace-pre-wrap">{item.revision_reason}</div></div> : null}
         </div>
@@ -376,6 +407,18 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
       <Block title="Workflow History" icon={History}>
         {item.history?.length ? <ol className="space-y-3">{item.history.map((event, index) => <li key={`${event.event_type}-${index}`} className="border-l-2 border-emerald-200 pl-4 text-sm"><div className="font-medium text-slate-900">{labels[event.to_state || ""] || humanize(event.event_type)}</div><div className="mt-1 text-slate-500">{event.from_state ? `${labels[event.from_state] || humanize(event.from_state)} → ` : ""}{formatDate(event.created_at)}</div></li>)}</ol> : <Unavailable message="No workflow history events were returned by the API." />}
         <p className="mt-3 text-xs text-slate-500">Customer submission records delivery to Origin Wallet. It is separate from an actual provider submission to Nium.</p>
+      </Block>
+
+      <Block title="Provider Submission History" icon={History}>
+        <dl aria-label="Safe provider submission history" className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 lg:grid-cols-3">
+          <Fact label="Submission state" value={labels[item.submission_state] || humanize(item.submission_state)} />
+          <Fact label="POST HTTP status" value={typeof item.provider_http_status === "number" ? String(item.provider_http_status) : "Not available"} />
+          <Fact label="Provider outcome" value={safeText(item.provider_outcome)} />
+          <Fact label="Authoritative GET confirmation" value={safeText(item.authoritative_rfi_status || item.provider_status)} />
+          <Fact label="Reconciliation timestamp" value={formatDate(item.reconciled_at)} />
+          <Fact label="Further reconciliation required" value={reconciliationRequired(item.manual_reconciliation_required)} />
+        </dl>
+        <p className="mt-3 text-xs text-slate-500">Only bounded operational evidence is shown. Exact provider response content and transport identifiers are not available here.</p>
       </Block>
 
       <section aria-labelledby="workflow-actions-title" className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm">

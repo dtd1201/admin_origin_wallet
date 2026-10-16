@@ -25,6 +25,12 @@ const cases = [
 ];
 const pageResponse = (data: AdminRfiCase[] = cases, lastPage = 1) => ({ current_page: 1, data, first_page_url: null, from: data.length ? 1 : null, last_page: lastPage, last_page_url: null, links: [], next_page_url: lastPage > 1 ? "page=2" : null, path: "/api/admin/nium-rfi-cases", per_page: 15, prev_page_url: null, to: data.length, total: data.length });
 const renderPage = () => { const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); return render(<QueryClientProvider client={client}><AdminRfiCases /></QueryClientProvider>); };
+const openOnlyCaseDetail = async (caseId: number) => {
+  fireEvent.click(await screen.findByRole("button", { name: "View RFI details" }));
+  const dialog = await screen.findByRole("dialog");
+  await within(dialog).findByText(`#${caseId}`, { selector: "dd" });
+  return dialog;
+};
 
 beforeEach(() => {
   vi.clearAllMocks(); auth.token = "admin-token";
@@ -83,6 +89,57 @@ it("shows full provider remarks, multiple requirements, document alternatives an
   expect(screen.getByText("Workflow History")).toBeInTheDocument();
   expect(screen.getByText("Technical Diagnostics").closest("details")).not.toHaveAttribute("open");
   expect(screen.getByText("Received")).toBeInTheDocument(); expect(screen.getByText("Provider Submission")).toBeInTheDocument();
+});
+
+it("shows Answers Not required for an authoritative document-only request", async () => {
+  const item = makeCase(51, { evidence: { template: { requiredFields: [{ fieldLabel: "Corporate document", fieldValue: "document", type: "document" }] } }, documents: [{ id: 1 }, { id: 2 }] });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage(); const dialog = await openOnlyCaseDetail(item.id);
+  expect(within(dialog).getByText("Answers").parentElement).toHaveTextContent("Not required");
+  expect(within(dialog).getByText("Evidence").parentElement).toHaveTextContent("2 attached");
+  expect(within(dialog).getByText(/Document-only request/)).toBeInTheDocument();
+});
+
+it("keeps missing textual answers visible", async () => {
+  const item = makeCase(52, { evidence: { template: { requiredFields: [{ fieldLabel: "Source of funds", fieldValue: "sourceOfFunds", type: "text" }] } }, response_draft: [] });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage(); const dialog = await openOnlyCaseDetail(item.id);
+  expect(within(dialog).getByText("Answers").parentElement).toHaveTextContent("Missing");
+  expect(within(dialog).getByText("Structured gaps").parentElement).toHaveTextContent("1 unanswered");
+});
+
+it("evaluates mixed document and text requirements independently", async () => {
+  const item = makeCase(53, { evidence: { template: { requiredFields: [{ fieldLabel: "Explanation", fieldValue: "explanation", type: "text" }, { fieldLabel: "Evidence", fieldValue: "document", type: "document" }] } }, response_draft: [], documents: [{ id: 3 }] });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage(); const dialog = await openOnlyCaseDetail(item.id);
+  expect(within(dialog).getByText("Answers").parentElement).toHaveTextContent("Missing");
+  expect(within(dialog).getAllByText("Evidence").find((node) => node.parentElement?.textContent?.includes("1 attached"))?.parentElement).toHaveTextContent("1 attached");
+});
+
+it("does not classify malformed requirements as document-only", async () => {
+  const item = makeCase(54, { evidence: { template: { requiredFields: [{ fieldLabel: "Unrecognized requirement" }, "invalid"] } }, response_draft: [] });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage(); const dialog = await openOnlyCaseDetail(item.id);
+  expect(within(dialog).getByText("Answers").parentElement).toHaveTextContent("Unverified");
+  expect(within(dialog).getByText(/requirements could not be safely classified/i)).toBeInTheDocument();
+});
+
+it("labels responded RFIs as under compliance review without implying clearance", async () => {
+  const item = makeCase(55, { status: "responded_under_review", provider_status: "RFI_RESPONDED", submission_state: "responded" });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage(); const dialog = await openOnlyCaseDetail(item.id);
+  expect(within(dialog).getByText("Provider RFI status").parentElement).toHaveTextContent("RFI Responded — Under Compliance Review");
+  expect(within(dialog).getByText("Origin Wallet state").parentElement).toHaveTextContent("Provider responded");
+  expect(within(dialog).queryByText(/KYC completed|Compliance cleared|Account activated|Approved by Nium/i)).not.toBeInTheDocument();
+});
+
+it("shows only safe bounded provider submission history fields", async () => {
+  const item = makeCase(56, { submission_state: "responded", provider_status: "RFI_RESPONDED", provider_http_status: 200, provider_outcome: "RECONCILED", authoritative_rfi_status: "RFI_RESPONDED", reconciled_at: "2026-10-16T08:00:00Z", manual_reconciliation_required: false });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item])); apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage(); const dialog = await openOnlyCaseDetail(item.id);
+  const history = within(dialog).getByLabelText("Safe provider submission history");
+  expect(history).toHaveTextContent("Provider responded"); expect(history).toHaveTextContent("200"); expect(history).toHaveTextContent("RECONCILED"); expect(history).toHaveTextContent("RFI_RESPONDED"); expect(history).toHaveTextContent("No");
+  expect(dialog).not.toHaveTextContent(/customerHashId|rfiHashId|x-request-id|api[_-]?key|private:\/\/|base64/i);
 });
 
 it("offers customer review actions without treating approval as provider submission", async () => {
@@ -146,6 +203,15 @@ it("refreshes authoritative Nium status without invoking submission", async () =
   renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
   fireEvent.click(await screen.findByRole("button", { name: "Refresh Nium Status" }));
   await waitFor(() => expect(apiMocks.refreshAdminRfiStatus).toHaveBeenCalledWith(refreshable, "admin-token"));
+  expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
+});
+
+it("does not allow a responded case to be submitted again", async () => {
+  const responded = makeCase(57, { status: "responded_under_review", provider_status: "RFI_RESPONDED", submission_state: "responded", submission_eligible: false, status_refresh_eligible: true, provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([responded])); apiMocks.getAdminRfiCase.mockResolvedValue(responded);
+  renderPage(); const dialog = await openOnlyCaseDetail(responded.id);
+  expect(within(dialog).queryByRole("button", { name: "Submit approved response to Nium" })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Refresh Nium Status" })).toBeEnabled();
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
 });
 
