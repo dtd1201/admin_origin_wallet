@@ -46,7 +46,7 @@ it("renders four authoritative RFIs by reliable customer identity and isolates o
   expect(screen.getByText("Personal Source of Funds")).toBeInTheDocument();
   expect(screen.getByText("Corporate Source of Wealth & Source of Funds")).toBeInTheDocument();
   expect(screen.getByLabelText("Authoritative provider RFI requests").querySelectorAll("article")).toHaveLength(4);
-  expect(screen.getAllByRole("button", { name: "View details" })).toHaveLength(4);
+  expect(screen.getAllByRole("button", { name: "View RFI details" })).toHaveLength(4);
   const history = screen.getByText("Historical webhook evidence").closest("section") as HTMLElement;
   expect(within(history).getByText(/^Legacy Webhook Notice$/i)).toBeInTheDocument();
   expect(within(history).getByText("Non-actionable")).toBeInTheDocument();
@@ -68,7 +68,7 @@ it("uses backend search, filters and pagination", async () => {
 it("shows full provider remarks, multiple requirements, document alternatives and customer evidence", async () => {
   const fullRemarks = "Please provide one of the following documents without changing the original content:\n1. Bank statement for the last three months\n2. Audited financial statements";
   apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(11, { business_name: "GREENTECH GLOBAL TRADING COMPANY LIMITED", template_name: "otherDocument", provider_remarks: fullRemarks, evidence: { remarks: fullRemarks, template: { requiredFields: [{ fieldLabel: "Source of funds explanation", fieldValue: "sourceOfFunds", type: "text", required: true, question: "Explain the origin of the company's funds." }, { fieldLabel: "Supporting financial evidence", fieldValue: "document", type: "document", required: false, choices: ["Bank statement", "Audited accounts"] }] } }, response_draft: [{ questionId: "sourceOfFunds", answer: "Operating revenue from wholesale activity." }], user_explanation: "Operating revenue from wholesale activity.", documents: [{ id: 7, type: "bank_statement", original_name: "statement.pdf", file_url: "/private/rfi/7", status: "uploaded" }], history: [{ event_type: "sent", from_state: "new", to_state: "sent_to_user", created_at: "2026-08-24T10:30:00Z" }] }));
-  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View details" }))[0]);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[0]);
   expect(await screen.findByText("Provider-authored text")).toBeInTheDocument();
   expect(screen.getByText("Please provide one of the following documents without changing the original content:")).toBeInTheDocument();
   expect(screen.getAllByText("Bank statement for the last three months").length).toBeGreaterThan(0);
@@ -86,7 +86,7 @@ it("shows full provider remarks, multiple requirements, document alternatives an
 
 it("offers customer review actions without treating approval as provider submission", async () => {
   apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(13, { submission_state: "user_submitted" }));
-  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View details" }))[2]);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[2]);
   expect(await screen.findByRole("button", { name: "Approve customer submission" })).toBeEnabled();
   expect(screen.getByText(/approval does not submit.*Nium/i)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Submit approved response to Nium" })).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ it("offers customer review actions without treating approval as provider submiss
 it("opens any selected authoritative case and exposes the supported send action", async () => {
   apiMocks.getAdminRfiCase.mockImplementation((id: number) => Promise.resolve({ ...cases.find((item) => item.id === id), evidence: { template: { requiredFields: [{ fieldLabel: id === 12 ? "Personal Source of Wealth" : "Requested information", fieldValue: "document", type: "document" }] } } }));
   renderPage();
-  fireEvent.click((await screen.findAllByRole("button", { name: "View details" }))[1]);
+  fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[1]);
   await waitFor(() => expect(apiMocks.getAdminRfiCase).toHaveBeenCalledWith(12, "admin-token"));
   expect(screen.getAllByRole("heading", { name: "Personal Source of Wealth" }).length).toBeGreaterThan(0);
   expect(screen.queryByRole("button", { name: "Send request to customer" })).not.toBeInTheDocument();
@@ -104,7 +104,7 @@ it("opens any selected authoritative case and exposes the supported send action"
 it("shows send to customer only for a backend-supported new request", async () => {
   apiMocks.getAdminRfiCase.mockResolvedValue({ ...cases[0], submission_state: "new" });
   renderPage();
-  fireEvent.click((await screen.findAllByRole("button", { name: "View details" }))[0]);
+  fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[0]);
   fireEvent.click(await screen.findByRole("button", { name: "Send request to customer" }));
   await waitFor(() => expect(apiMocks.sendAdminRfiToUser).toHaveBeenCalledWith(11, "admin-token"));
 });
@@ -113,7 +113,7 @@ it("handles missing optional detail fields without inventing requirements", asyn
   apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([makeCase(41, { customer_id: 401, customer_name: "Minimal Customer", template_name: null, provider_remarks: null })]));
   apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(41, { customer_id: 401, customer_name: "Minimal Customer", evidence: null }));
   renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+  fireEvent.click(await screen.findByRole("button", { name: "View RFI details" }));
   expect(await screen.findByText("No original provider remarks were supplied.")).toBeInTheDocument();
   expect(screen.getByText("No structured information fields were supplied by the provider.")).toBeInTheDocument();
   expect(screen.getByText(/without inferring additional requirements/)).toBeInTheDocument();
@@ -121,7 +121,7 @@ it("handles missing optional detail fields without inventing requirements", asyn
 
 it("keeps provider POST blocked while the contract is unconfirmed", async () => {
   apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(14, { submission_state: "approved" }));
-  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View details" }))[3]);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
   expect(await screen.findByText(/provider contract remains unconfirmed/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Submit approved response to Nium" })).toBeDisabled();
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ it("keeps provider POST blocked while the contract is unconfirmed", async () => 
 
 it("submits a confirmed provider response only after confirmation", async () => {
   apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed" }));
-  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View details" }))[3]);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
   fireEvent.click(await screen.findByRole("button", { name: "Submit approved response to Nium" }));
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
   await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(14, "admin-token"));
@@ -138,7 +138,7 @@ it("submits a confirmed provider response only after confirmation", async () => 
 it("preserves factual draft and approval actions", async () => {
   const draft = makeCase(21, { submission_state: "draft" });
   apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([draft])); apiMocks.getAdminRfiCase.mockResolvedValue(draft);
-  renderPage(); fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+  renderPage(); fireEvent.click(await screen.findByRole("button", { name: "View RFI details" }));
   fireEvent.change(await screen.findByLabelText("Question ID"), { target: { value: "source-of-funds" } });
   fireEvent.change(screen.getByLabelText("Factual answer"), { target: { value: "Customer operating revenue" } });
   fireEvent.click(screen.getByRole("button", { name: "Save factual draft" }));

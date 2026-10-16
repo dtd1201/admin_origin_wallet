@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Building2, Check, ChevronRight, FileCheck2, FileText, History, Inbox, MessageSquareText, RefreshCw, Search, Send, ShieldAlert, UserRoundCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, Check, ChevronRight, FileCheck2, FileText, History, Inbox, MessageSquareText, RefreshCw, Search, Send, ShieldAlert, UserRoundCheck } from "lucide-react";
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -269,10 +269,12 @@ const RequestCard = ({ item, inspect }: { item: AdminRfiCase; inspect: () => voi
         <div className="text-xs font-semibold uppercase tracking-wider text-amber-800">Next permitted step</div>
         <div className="mt-1 font-medium">{nextAction(item)}</div>
       </div>
-      <Button className="mt-3 w-full sm:w-auto" variant="outline" onClick={inspect}>
-        View details
-        <ChevronRight className="h-4 w-4" />
-      </Button>
+      <div className="mt-3 flex justify-end">
+        <Button className="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto" onClick={inspect}>
+          View RFI details
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   </article>
 );
