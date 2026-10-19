@@ -186,6 +186,8 @@ export interface AdminRfiCase {
   provider_remarks?: string | null;
   required_document_count?: number;
   submission_eligible?: boolean;
+  live_submit_permitted?: boolean;
+  submission_blockers?: string[];
   status_refresh_eligible?: boolean;
   provider_reference_fingerprint?: string | null;
   template_fingerprint?: string | null;

@@ -186,7 +186,7 @@ it("keeps provider POST blocked while the contract is unconfirmed", async () => 
 });
 
 it("submits a confirmed provider response only after exact live confirmation", async () => {
-  const eligible = makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed", submission_eligible: true, provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  const eligible = makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed", live_submit_permitted: true, submission_eligible: true, submission_blockers: [], provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
   apiMocks.getAdminRfiCase.mockResolvedValue(eligible);
   renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
   fireEvent.click(await screen.findByRole("button", { name: "Submit approved response to Nium" }));
@@ -195,6 +195,15 @@ it("submits a confirmed provider response only after exact live confirmation", a
   fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 14" } });
   fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
   await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(eligible, "admin-token"));
+});
+
+it("shows backend blocker reasons and denies live submit without the dedicated permission", async () => {
+  const denied = makeCase(14, { submission_state: "approved", live_submit_permitted: false, submission_eligible: false, submission_blockers: ["Your Admin role does not permit live provider submission."] });
+  apiMocks.getAdminRfiCase.mockResolvedValue(denied);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
+  expect(await screen.findByText("Your Admin role does not permit live provider submission.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit approved response to Nium" })).toBeDisabled();
+  expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
 });
 
 it("refreshes authoritative Nium status without invoking submission", async () => {

@@ -339,7 +339,7 @@ export const submitAdminRfiCase = (item: Pick<AdminRfiCase, "id" | "provider_ref
     method: "POST",
     body: {
       case_id: item.id,
-      confirmation: "SUBMIT_TO_NIUM_LIVE",
+      confirmation: `SUBMIT ${item.id}`,
       provider_reference_fingerprint: item.provider_reference_fingerprint,
       template_fingerprint: item.template_fingerprint,
     },
