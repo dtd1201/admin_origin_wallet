@@ -14,7 +14,9 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: auth.token }
 
 const makeCase = (id: number, overrides: Partial<AdminRfiCase> = {}): AdminRfiCase => ({
   id, scope: "customer", origin: "authoritative_fetch", status: "requested", contract_gate: "provider_contract_unconfirmed",
-  submission_state: "new", created_at: "2026-08-24T09:00:00Z", updated_at: "2026-08-24T10:00:00Z", ...overrides,
+  submission_state: "new", created_at: "2026-08-24T09:00:00Z", updated_at: "2026-08-24T10:00:00Z",
+  last_activity_at: "2026-08-24T09:30:00Z", customer_submitted_at: null, admin_approved_at: null,
+  provider_responded_at: null, last_synced_at: "2026-08-24T10:00:00Z", ...overrides,
 });
 const cases = [
   makeCase(11, { customer_id: 101, business_name: "GREENTECH GLOBAL TRADING COMPANY LIMITED", template_name: "businessRegistrationDocument", provider_remarks: "Provide the Business Registration Document and Certificate of Incorporation." }),
@@ -58,6 +60,33 @@ it("renders four authoritative RFIs by reliable customer identity and isolates o
   expect(within(history).getByText(/^Legacy Webhook Notice$/i)).toBeInTheDocument();
   expect(within(history).getByText("Non-actionable")).toBeInTheDocument();
   expect(within(history).queryByRole("button", { name: /inspect/i })).not.toBeInTheDocument();
+});
+
+it("shows business activity separately from synchronization on list and detail", async () => {
+  const item = makeCase(61, {
+    customer_name: "Timestamp Customer",
+    last_activity_at: "2026-10-05T09:00:00Z",
+    customer_submitted_at: "2026-10-03T09:00:00Z",
+    admin_approved_at: "2026-10-05T09:00:00Z",
+    provider_responded_at: null,
+    last_synced_at: "2026-10-20T12:00:00Z",
+  });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([item]));
+  apiMocks.getAdminRfiCase.mockResolvedValue(item);
+  renderPage();
+
+  const card = (await screen.findByText("Timestamp Customer")).closest("section") as HTMLElement;
+  expect(within(card).getByText("Last activity")).toBeInTheDocument();
+  expect(within(card).getByText("Last synced")).toBeInTheDocument();
+  expect(within(card).getByText("Provider responded").parentElement).toHaveTextContent("Not available");
+
+  fireEvent.click(screen.getByRole("button", { name: "View RFI details" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getAllByText("Last activity").length).toBeGreaterThan(0);
+  expect(within(dialog).getAllByText("Customer submitted").length).toBeGreaterThan(0);
+  expect(within(dialog).getAllByText("Admin approved").length).toBeGreaterThan(0);
+  expect(within(dialog).getAllByText("Provider responded").some((node) => node.parentElement?.textContent?.includes("Not available"))).toBe(true);
+  expect(within(dialog).getAllByText("Last synced").length).toBeGreaterThan(0);
 });
 
 it("uses backend search, filters and pagination", async () => {

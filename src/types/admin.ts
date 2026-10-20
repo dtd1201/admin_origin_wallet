@@ -171,6 +171,12 @@ export interface AdminRfiCase {
   approved_at?: string | null;
   claimed_at?: string | null;
   reconciled_at?: string | null;
+  last_activity_at?: string | null;
+  customer_submitted_at?: string | null;
+  admin_approved_at?: string | null;
+  provider_acknowledged_at?: string | null;
+  provider_responded_at?: string | null;
+  last_synced_at?: string | null;
   evidence?: Record<string, unknown> | null;
   response_draft?: Array<{
     questionId?: string;

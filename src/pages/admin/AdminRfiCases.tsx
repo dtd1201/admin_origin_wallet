@@ -319,7 +319,11 @@ const RequestCard = ({ item, inspect }: { item: AdminRfiCase; inspect: () => voi
 
     <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
       <Fact label="Required information" value={requiredDocumentCount(item) ? `${requiredDocumentCount(item)} provider-defined item(s)` : "Not summarized in list response"} />
-      <Fact label="Last updated" value={formatDate(item.updated_at)} />
+      <Fact label="Last activity" value={formatDate(item.last_activity_at)} />
+      <Fact label="Customer submitted" value={formatDate(item.customer_submitted_at)} />
+      <Fact label="Admin approved" value={formatDate(item.admin_approved_at)} />
+      <Fact label="Provider responded" value={formatDate(item.provider_responded_at)} />
+      <Fact label="Last synced" value={formatDate(item.last_synced_at)} />
     </dl>
 
     <div className="mt-auto pt-5">
@@ -375,7 +379,11 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
           <Fact label="Provider RFI status" value={providerStatusLabel(item)} />
           <Fact label="Origin Wallet state" value={labels[item.submission_state] || humanize(item.submission_state)} />
           <Fact label="Business status" value={humanize(item.status)} />
-          <Fact label="Last updated" value={formatDate(item.updated_at)} />
+          <Fact label="Last activity" value={formatDate(item.last_activity_at)} />
+          <Fact label="Customer submitted" value={formatDate(item.customer_submitted_at)} />
+          <Fact label="Admin approved" value={formatDate(item.admin_approved_at)} />
+          <Fact label="Provider responded" value={formatDate(item.provider_responded_at)} />
+          <Fact label="Last synced" value={formatDate(item.last_synced_at)} />
         </dl>
       </section>
 
@@ -444,7 +452,9 @@ const CaseDetail = ({ item, answers, setAnswers, revisionReason, setRevisionReas
           <Fact label="POST HTTP status" value={typeof item.submission_http_status === "number" ? String(item.submission_http_status) : "Not available"} />
           <Fact label="Provider outcome" value={safeText(item.submission_outcome)} />
           <Fact label="Authoritative GET confirmation" value={safeText(item.authoritative_rfi_status || item.provider_status)} />
-          <Fact label="Reconciliation timestamp" value={formatDate(item.reconciled_at)} />
+          <Fact label="Provider acknowledged" value={formatDate(item.provider_acknowledged_at)} />
+          <Fact label="Provider responded" value={formatDate(item.provider_responded_at)} />
+          <Fact label="Last synced" value={formatDate(item.last_synced_at)} />
           <Fact label="Further reconciliation required" value={reconciliationRequired(item.reconciliation_required)} />
         </dl>
         <p className="mt-3 text-xs text-slate-500">Only bounded operational evidence is shown. Exact provider response content and transport identifiers are not available here.</p>
