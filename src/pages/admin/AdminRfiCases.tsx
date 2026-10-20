@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Building2, Check, ChevronRight, FileCheck2, FileText, History, Inbox, MessageSquareText, RefreshCw, Search, Send, ShieldAlert, UserRoundCheck } from "lucide-react";
-import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,17 +103,19 @@ const withCustomer = (state: string) => ["sent_to_user", "user_draft", "revision
 const needsAction = (state: string) => ["new", "revision_requested", "user_submitted", "admin_review", "not_claimed", "draft", "approved", "nium_submission_failed"].includes(state);
 const complete = (state: string) => ["nium_submitted", "provider_acknowledged", "unknown", "rejected", "responded", "reconciled"].includes(state);
 const permissionFailure = (error: unknown) => error instanceof Error && /403|forbidden|permission|unauthori[sz]ed/i.test(error.message);
-const submissionBlockers = (item: AdminRfiCase) => item.submission_blockers?.length
-  ? item.submission_blockers
-  : item.contract_gate === "provider_contract_unconfirmed"
-    ? ["The provider contract remains unconfirmed for live submission."]
-    : [];
+const readinessKnown = (item: AdminRfiCase) => typeof item.submission_eligible === "boolean" && typeof item.live_submit_permitted === "boolean" && Array.isArray(item.submission_blockers);
+const submissionBlockers = (item: AdminRfiCase) => {
+  if (!readinessKnown(item)) return ["Live submission readiness is unavailable. Refresh the case before submitting."];
+  if (item.live_submit_permitted !== true) return item.submission_blockers.length ? item.submission_blockers : ["Your Admin session is not permitted to make a live provider submission."];
+  if (item.submission_eligible !== true) return item.submission_blockers.length ? item.submission_blockers : ["The backend has not confirmed this case as eligible for live submission."];
+  return [];
+};
 const nextAction = (item: AdminRfiCase) => {
   if (["new", "revision_requested"].includes(item.submission_state)) return "Send request to customer";
   if (withCustomer(item.submission_state)) return "Await customer response";
   if (["user_submitted", "admin_review"].includes(item.submission_state)) return "Review customer submission";
   if (["not_claimed", "draft"].includes(item.submission_state)) return "Complete and approve response";
-  if (["approved", "admin_approved", "nium_submission_failed"].includes(item.submission_state)) return item.contract_gate === "provider_contract_unconfirmed" ? "Provider contract confirmation required" : "Submit approved response to Nium";
+  if (["approved", "admin_approved", "nium_submission_failed"].includes(item.submission_state)) return submissionBlockers(item).length ? "Resolve the backend-reported submission blockers" : "Submit approved response to Nium";
   return complete(item.submission_state) ? "No action required" : "Monitor provider status";
 };
 
@@ -133,18 +135,27 @@ const AdminRfiCases = () => {
   const [actionSuccess, setActionSuccess] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [liveConfirmation, setLiveConfirmation] = useState("");
+  const submissionInFlight = useRef(false);
 
   const query = useMemo(() => { const params = new URLSearchParams({ page: String(page) }); if (search.trim()) params.set("search", search.trim()); if (scope !== "all") params.set("scope", scope); if (status.trim()) params.set("status", status.trim()); if (submissionState !== "all") params.set("submission_state", submissionState); return params.toString(); }, [page, scope, search, status, submissionState]);
   const casesQuery = useQuery({ queryKey: ["admin", "nium-rfi-cases", query, token], enabled: !!token, queryFn: () => getAdminRfiCases(query, token) });
   const detailQuery = useQuery({ queryKey: ["admin", "nium-rfi-cases", "detail", selectedId, token], enabled: !!token && selectedId !== null, queryFn: () => getAdminRfiCase(selectedId as number, token) });
-  const refresh = async (updated?: AdminRfiCase) => { if (updated) client.setQueryData(["admin", "nium-rfi-cases", "detail", updated.id, token], updated); await client.invalidateQueries({ queryKey: ["admin", "nium-rfi-cases"] }); };
+  const refresh = async (updated?: AdminRfiCase, authoritativeDetail = false) => {
+    if (updated) client.setQueryData(["admin", "nium-rfi-cases", "detail", updated.id, token], updated);
+    await client.invalidateQueries({ queryKey: ["admin", "nium-rfi-cases"] });
+    if (authoritativeDetail && selectedId !== null) await client.refetchQueries({ queryKey: ["admin", "nium-rfi-cases", "detail", selectedId, token], exact: true });
+  };
   const mutation = useMutation({
+    retry: false,
     mutationFn: async ({ action, item }: { action: "send" | "revision" | "approve-user" | "save-draft" | "approve-draft" | "submit-provider" | "refresh-provider"; item: AdminRfiCase }) => {
       if (action === "send") return sendAdminRfiToUser(item.id, token);
       if (action === "revision") return requestAdminRfiRevision(item.id, revisionReason.trim(), token);
       if (action === "approve-user") return approveAdminRfiUserSubmission(item.id, token);
       if (action === "approve-draft") return approveAdminRfiCase(item.id, token);
-      if (action === "submit-provider") { if (!item.submission_eligible || !item.provider_reference_fingerprint || !item.template_fingerprint) throw new Error("The backend has not confirmed that this exact Corporate RFI is eligible for live submission."); return submitAdminRfiCase(item, token); }
+      if (action === "submit-provider") {
+        if (item.submission_eligible !== true || item.live_submit_permitted !== true || !Array.isArray(item.submission_blockers) || !item.provider_reference_fingerprint || !item.template_fingerprint) throw new Error("The backend has not confirmed that this exact Corporate RFI is eligible and permitted for live submission.");
+        return submitAdminRfiCase(item, token);
+      }
       if (action === "refresh-provider") { if (!item.status_refresh_eligible || !item.provider_reference_fingerprint || !item.template_fingerprint) throw new Error("The backend has not confirmed that this case can be refreshed."); return refreshAdminRfiStatus(item, token); }
       const factualAnswers = answers.map((answer) => ({ questionId: answer.questionId.trim(), answer: answer.answer.trim() }));
       if (factualAnswers.some((answer) => !answer.questionId || !answer.answer)) throw new Error("Each response item requires a question ID and factual answer.");
@@ -161,13 +172,21 @@ const AdminRfiCases = () => {
         "refresh-provider": "The authoritative Nium status was refreshed.",
       };
       setActionError("");
-      setActionSuccess(messages[variables.action]);
+      const submitMessage = updated.submission_outcome === "UNKNOWN" || updated.submission_state === "unknown"
+        ? "The submission outcome is uncertain. The case was refreshed; do not retry automatically."
+        : messages[variables.action];
+      setActionSuccess(variables.action === "submit-provider" ? submitMessage : messages[variables.action]);
       setConfirmAction(null);
       setLiveConfirmation("");
       setRevisionReason("");
-      await refresh(updated);
+      await refresh(updated, variables.action === "submit-provider");
     },
-    onError: (error) => { setConfirmAction(null); setLiveConfirmation(""); setActionSuccess(""); setActionError(error instanceof Error ? error.message : "Unable to update the RFI request."); },
+    onError: async (error, variables) => {
+      setConfirmAction(null); setLiveConfirmation(""); setActionSuccess("");
+      setActionError(variables.action === "submit-provider" ? `${error instanceof Error ? error.message : "The live submission request failed."} The outcome may be uncertain; the case was refreshed and was not retried.` : error instanceof Error ? error.message : "Unable to update the RFI request.");
+      if (variables.action === "submit-provider") await refresh(undefined, true);
+    },
+    onSettled: (_data, _error, variables) => { if (variables.action === "submit-provider") submissionInFlight.current = false; },
   });
 
   const rows = casesQuery.data?.data ?? [];
@@ -262,7 +281,12 @@ const AdminRfiCases = () => {
             disabled={mutation.isPending || confirmAction === "submit-provider" && liveConfirmation !== `SUBMIT ${selected?.id ?? ""}`}
             onClick={(event) => {
               event.preventDefault();
-              if (selected && confirmAction) mutation.mutate({ action: confirmAction, item: selected });
+              if (!selected || !confirmAction) return;
+              if (confirmAction === "submit-provider") {
+                if (submissionInFlight.current) return;
+                submissionInFlight.current = true;
+              }
+              mutation.mutate({ action: confirmAction, item: selected });
             }}
           >
             Confirm

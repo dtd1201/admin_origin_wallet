@@ -165,6 +165,7 @@ export interface AdminRfiCase {
   id: number;
   scope: AdminRfiScope;
   status: string;
+  provider_status?: string | null;
   contract_gate: string;
   submission_state: AdminRfiSubmissionState;
   approved_at?: string | null;

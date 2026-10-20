@@ -177,33 +177,75 @@ it("handles missing optional detail fields without inventing requirements", asyn
   expect(screen.getByText(/without inferring additional requirements/)).toBeInTheDocument();
 });
 
-it("keeps provider POST blocked while the contract is unconfirmed", async () => {
+it("fails closed when live submission readiness fields are missing", async () => {
   apiMocks.getAdminRfiCase.mockResolvedValue(makeCase(14, { submission_state: "approved" }));
   renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
-  expect(await screen.findByText(/provider contract remains unconfirmed/)).toBeInTheDocument();
+  expect(await screen.findByText(/live submission readiness is unavailable/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Submit approved response to Nium" })).toBeDisabled();
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
 });
 
-it("submits a confirmed provider response only after exact live confirmation", async () => {
-  const eligible = makeCase(14, { submission_state: "approved", contract_gate: "provider_contract_confirmed", live_submit_permitted: true, submission_eligible: true, submission_blockers: [], provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+it("uses backend eligibility even when the diagnostic contract gate is unconfirmed", async () => {
+  const eligible = makeCase(7, { customer_id: 101, business_name: "GREENTECH GLOBAL TRADING COMPANY LIMITED", submission_state: "admin_approved", live_submit_permitted: true, submission_eligible: true, submission_blockers: [], provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  apiMocks.getAdminRfiCases.mockResolvedValue(pageResponse([eligible]));
   apiMocks.getAdminRfiCase.mockResolvedValue(eligible);
-  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
-  fireEvent.click(await screen.findByRole("button", { name: "Submit approved response to Nium" }));
+  renderPage(); const dialog = await openOnlyCaseDetail(7);
+  expect(within(dialog).queryByText(/provider contract remains unconfirmed/i)).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Submit approved response to Nium" })).toBeEnabled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Submit approved response to Nium" }));
+  expect(screen.getByText(/GREENTECH GLOBAL TRADING COMPANY LIMITED, Case #7/)).toBeInTheDocument();
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 14" } });
+  fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 7 " } });
+  expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 7" } });
   fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
   await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledWith(eligible, "admin-token"));
 });
 
+it("blocks submission when backend eligibility is false", async () => {
+  const denied = makeCase(14, { submission_state: "approved", live_submit_permitted: true, submission_eligible: false, submission_blockers: ["Supporting documents require approval."] });
+  apiMocks.getAdminRfiCase.mockResolvedValue(denied);
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
+  expect(await screen.findByText("Supporting documents require approval.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit approved response to Nium" })).toBeDisabled();
+});
+
 it("shows backend blocker reasons and denies live submit without the dedicated permission", async () => {
-  const denied = makeCase(14, { submission_state: "approved", live_submit_permitted: false, submission_eligible: false, submission_blockers: ["Your Admin role does not permit live provider submission."] });
+  const denied = makeCase(14, { submission_state: "approved", live_submit_permitted: false, submission_eligible: true, submission_blockers: ["Your Admin role does not permit live provider submission."] });
   apiMocks.getAdminRfiCase.mockResolvedValue(denied);
   renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
   expect(await screen.findByText("Your Admin role does not permit live provider submission.")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Submit approved response to Nium" })).toBeDisabled();
   expect(apiMocks.submitAdminRfiCase).not.toHaveBeenCalled();
+});
+
+it("prevents duplicate submissions and refreshes authoritative detail after completion", async () => {
+  const eligible = makeCase(14, { submission_state: "approved", live_submit_permitted: true, submission_eligible: true, submission_blockers: [], provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  let resolveSubmission!: (value: AdminRfiCase) => void;
+  apiMocks.getAdminRfiCase.mockResolvedValue(eligible);
+  apiMocks.submitAdminRfiCase.mockReturnValue(new Promise((resolve) => { resolveSubmission = resolve; }));
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
+  fireEvent.click(await screen.findByRole("button", { name: "Submit approved response to Nium" }));
+  fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 14" } });
+  const confirm = screen.getByRole("button", { name: "Confirm" });
+  fireEvent.click(confirm); fireEvent.click(confirm);
+  await waitFor(() => expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledTimes(1));
+  resolveSubmission(makeCase(14, { submission_state: "nium_submitted", submission_outcome: "ACKNOWLEDGED" }));
+  await waitFor(() => expect(apiMocks.getAdminRfiCase.mock.calls.filter(([id]) => id === 14).length).toBeGreaterThan(1));
+});
+
+it("does not retry an uncertain submission and refreshes the case", async () => {
+  const eligible = makeCase(14, { submission_state: "approved", live_submit_permitted: true, submission_eligible: true, submission_blockers: [], provider_reference_fingerprint: "a".repeat(64), template_fingerprint: "b".repeat(64) });
+  apiMocks.getAdminRfiCase.mockResolvedValue(eligible);
+  apiMocks.submitAdminRfiCase.mockRejectedValue(new Error("Request timed out"));
+  renderPage(); fireEvent.click((await screen.findAllByRole("button", { name: "View RFI details" }))[3]);
+  fireEvent.click(await screen.findByRole("button", { name: "Submit approved response to Nium" }));
+  fireEvent.change(screen.getByLabelText("Live submission confirmation"), { target: { value: "SUBMIT 14" } });
+  fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/outcome may be uncertain.*not retried/i);
+  expect(apiMocks.submitAdminRfiCase).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(apiMocks.getAdminRfiCase.mock.calls.filter(([id]) => id === 14).length).toBeGreaterThan(1));
 });
 
 it("refreshes authoritative Nium status without invoking submission", async () => {
