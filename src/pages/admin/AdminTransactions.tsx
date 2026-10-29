@@ -1,3 +1,5 @@
+import { ProviderLogo } from "@/components/shared/ProviderLogo";
+import { getProviderDisplayName } from "@/lib/providerDisplay";
 import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +16,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 
 type TransferAction = "approve" | "reject";
+
+const transferProviderLabel = (provider: AdminTransfer["provider"]) => provider
+  ? getProviderDisplayName({ ...provider, name: provider.name?.trim() || provider.code?.trim() || "Unknown provider" })
+  : "Unknown provider";
 
 const workflowStatusLabels: Record<string, string> = {
   approval_required: "Approval required",
@@ -256,7 +262,10 @@ const AdminTransactions = () => {
 
                     <div className="mt-4 grid gap-2 text-sm text-slate-600">
                       <div className="break-words [overflow-wrap:anywhere]">{row.user?.email || `User #${row.user_id}`}</div>
-                      <div className="text-xs text-slate-600">{row.provider?.name || "Origin Wallet"}</div>
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <ProviderLogo provider={row.provider} className="h-6 w-6 rounded-md" />
+                        <span>{transferProviderLabel(row.provider)}</span>
+                      </div>
                       <div className="font-medium text-slate-900">
                         <CurrencyDisplay currency={row.source_currency}>{formatAmount(row.source_amount, row.source_currency)}</CurrencyDisplay>
                       </div>
@@ -320,8 +329,9 @@ const AdminTransactions = () => {
                           <div className="break-all text-sm font-medium leading-5 text-slate-900">
                             {row.user?.email || `User #${row.user_id}`}
                           </div>
-                          <div className="mt-1 text-xs font-medium text-slate-600">
-                            {row.provider?.name || "Origin Wallet"}
+                          <div className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-600">
+                            <ProviderLogo provider={row.provider} className="h-6 w-6 rounded-md" />
+                            <span>{transferProviderLabel(row.provider)}</span>
                           </div>
                         </TableCell>
                         <TableCell className="py-4 text-right align-top">

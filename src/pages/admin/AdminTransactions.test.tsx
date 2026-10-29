@@ -129,3 +129,28 @@ it("distinguishes approval required, pending, completed and failed without chang
   expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   expect(apiMocks.requestApi.mock.calls.every(([, options]) => options?.method === "GET")).toBe(true);
 });
+
+it("reuses the canonical Origin Wallet logo in desktop/mobile transfers while preserving currency flags", async () => {
+  apiMocks.requestApi.mockResolvedValue(page([{ ...transfer, provider: { id: 1, code: "nium", name: "Nium", status: "active" } }]));
+  const { container } = renderPage();
+  const logos = await screen.findAllByRole("img", { name: "Origin Wallet logo" });
+  expect(logos).toHaveLength(2);
+  logos.forEach((logo) => expect(logo).toHaveAttribute("src", "/logo/logo.jpg"));
+  expect(screen.getAllByText("Origin Wallet")).toHaveLength(2);
+  expect(container.querySelectorAll('img[src="/src/assets/flags/us.svg"]')).toHaveLength(2);
+  expect(container.querySelectorAll('img[src="/src/assets/flags/eu.svg"]')).toHaveLength(2);
+  expect(apiMocks.requestApi.mock.calls.every(([, options]) => options?.method === "GET")).toBe(true);
+});
+
+it("preserves other providers and uses a neutral identity for missing transfer providers", async () => {
+  apiMocks.requestApi.mockResolvedValue(page([
+    { ...transfer, provider: { ...transfer.provider!, name: "Other Provider", logo_url: "/other-provider.svg" } },
+    { ...transfer, id: 43, transfer_no: "OTHER-TRANSFER", provider: null },
+  ]));
+  renderPage();
+  const logos = await screen.findAllByRole("img", { name: "Other Provider logo" });
+  logos.forEach((logo) => expect(logo).toHaveAttribute("src", "/other-provider.svg"));
+  expect(screen.getAllByText("Unknown provider")).toHaveLength(2);
+  expect(screen.getAllByRole("img", { name: "Unknown provider logo" })).toHaveLength(2);
+  expect(screen.queryByRole("img", { name: "Origin Wallet logo" })).not.toBeInTheDocument();
+});

@@ -1,5 +1,6 @@
+import { ProviderLogo } from "@/components/shared/ProviderLogo";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Building2, Link2, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminEndpointConfig, requestApi, type PaginatedResponse } from "@/lib/api";
@@ -497,21 +498,8 @@ const AdminProviders = () => {
   );
 };
 
-const ProviderLogoPreview = ({ provider }: { provider: Pick<ProviderSummary, "code" | "name" | "logo_url"> }) => {
-  const providerLabel = getProviderDisplayName(provider);
-  const fallback = providerLabel.slice(0, 1).toUpperCase();
-
-  return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700">
-      {provider.logo_url ? (
-        <img src={provider.logo_url} alt={providerLabel} className="h-full w-full object-contain p-1.5" />
-      ) : providerLabel ? (
-        fallback
-      ) : (
-        <ImageIcon className="h-5 w-5" />
-      )}
-    </div>
-  );
-};
+const ProviderLogoPreview = ({ provider }: { provider: Pick<ProviderSummary, "code" | "name" | "logo_url"> }) => (
+  <ProviderLogo provider={provider} className="h-11 w-11 rounded-2xl" />
+);
 
 export default AdminProviders;
