@@ -114,3 +114,18 @@ it("uses backend pagination metadata without inventing totals", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   await waitFor(() => expect(apiMocks.requestApi).toHaveBeenCalledWith("/admin/transfers?page=2", expect.objectContaining({ method: "GET" })));
 });
+
+it("distinguishes approval required, pending, completed and failed without changing permitted actions", async () => {
+  const statuses = ["approval_required", "pending", "completed", "failed"];
+  apiMocks.requestApi.mockResolvedValue(page(statuses.map((status, index) => ({ ...transfer, id: index + 1, transfer_no: `TR-STATUS-${index}`, status }))));
+  renderPage();
+  for (const label of ["Approval required", "Pending", "Completed", "Failed"]) {
+    expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+  }
+  expect(screen.getAllByText("Approval required")[0]).toHaveClass("text-indigo-800");
+  expect(screen.getAllByText("Pending")[0]).toHaveClass("text-amber-900");
+  expect(screen.getAllByText("Completed")[0]).toHaveClass("text-emerald-800");
+  expect(screen.getAllByText("Failed")[0]).toHaveClass("text-rose-800");
+  expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+  expect(apiMocks.requestApi.mock.calls.every(([, options]) => options?.method === "GET")).toBe(true);
+});

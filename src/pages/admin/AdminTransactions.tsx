@@ -1,3 +1,4 @@
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Clock3, Eye, ReceiptText, RefreshCcw } from "lucide-react";
@@ -15,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 type TransferAction = "approve" | "reject";
 
 const workflowStatusLabels: Record<string, string> = {
+  approval_required: "Approval required",
   pending: "Pending",
   submitted: "Submitted",
   processing: "Processing",
@@ -59,16 +61,18 @@ const formatAmount = (amount?: string | number | null, currency?: string | null)
 const statusClassName = (status: string) => {
   const normalized = status.toLowerCase();
 
+  if (normalized === "approval_required") return "border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-50";
+
   if (["completed", "approved"].includes(normalized)) {
-    return "bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50";
   }
 
   if (["failed", "cancelled", "rejected"].includes(normalized)) {
-    return "bg-red-100 text-red-700 hover:bg-red-100";
+    return "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-50";
   }
 
   if (["approval_required", "pending", "submitted"].includes(normalized)) {
-    return "bg-amber-100 text-amber-700 hover:bg-amber-100";
+    return "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-50";
   }
 
   return "bg-slate-100 text-slate-700 hover:bg-slate-100";
@@ -213,9 +217,9 @@ const AdminTransactions = () => {
   };
 
   return (
-    <div className="px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.65fr)]">
-        <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+    <div className="wallet-ui px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
+      <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.65fr)]">
+        <Card className="wallet-card min-w-0 rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle className="text-2xl">Transfer queue</CardTitle>
@@ -223,7 +227,7 @@ const AdminTransactions = () => {
             </div>
             <Button
               variant="outline"
-              className="rounded-2xl border-slate-200"
+              className="h-10 rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-emerald-50"
               onClick={() => void transfersQuery.refetch()}
               disabled={transfersQuery.isFetching}
             >
@@ -251,12 +255,13 @@ const AdminTransactions = () => {
                     </div>
 
                     <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                      <div>{row.user?.email || `User #${row.user_id}`}</div>
+                      <div className="break-words [overflow-wrap:anywhere]">{row.user?.email || `User #${row.user_id}`}</div>
+                      <div className="text-xs text-slate-600">{row.provider?.name || "Origin Wallet"}</div>
                       <div className="font-medium text-slate-900">
-                        {formatAmount(row.source_amount, row.source_currency)}
+                        <CurrencyDisplay currency={row.source_currency}>{formatAmount(row.source_amount, row.source_currency)}</CurrencyDisplay>
                       </div>
                       <div className="text-xs text-slate-500">
-                        {formatAmount(row.target_amount, row.target_currency)}
+                        {row.target_amount == null ? formatAmount(row.target_amount, row.target_currency) : <CurrencyDisplay currency={row.target_currency}>{formatAmount(row.target_amount, row.target_currency)}</CurrencyDisplay>}
                       </div>
                       {row.failure_reason && <div className="text-xs text-red-600">{row.failure_reason}</div>}
                     </div>
@@ -271,7 +276,7 @@ const AdminTransactions = () => {
               )}
             </div>
 
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white lg:block">
+            <div role="region" aria-label="Transfer queue" tabIndex={0} className="wallet-table-scroll hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white lg:block">
               <Table className="min-w-[760px] table-fixed 2xl:min-w-0">
                 <TableHeader className="bg-slate-50/90">
                   <TableRow className="border-slate-200 hover:bg-slate-50/90">
@@ -315,16 +320,16 @@ const AdminTransactions = () => {
                           <div className="break-all text-sm font-medium leading-5 text-slate-900">
                             {row.user?.email || `User #${row.user_id}`}
                           </div>
-                          <div className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">
-                            Origin Wallet
+                          <div className="mt-1 text-xs font-medium text-slate-600">
+                            {row.provider?.name || "Origin Wallet"}
                           </div>
                         </TableCell>
                         <TableCell className="py-4 text-right align-top">
-                          <div className="whitespace-nowrap text-sm font-semibold tabular-nums text-slate-950">
-                            {formatAmount(row.source_amount, row.source_currency)}
+                          <div className="text-sm font-semibold tabular-nums text-slate-950">
+                            <CurrencyDisplay currency={row.source_currency}>{formatAmount(row.source_amount, row.source_currency)}</CurrencyDisplay>
                           </div>
-                          <div className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-slate-500">
-                            {formatAmount(row.target_amount, row.target_currency)}
+                          <div className="mt-2 text-xs tabular-nums text-slate-500">
+                            {row.target_amount == null ? formatAmount(row.target_amount, row.target_currency) : <CurrencyDisplay currency={row.target_currency}>{formatAmount(row.target_amount, row.target_currency)}</CurrencyDisplay>}
                           </div>
                         </TableCell>
                         <TableCell className="py-4 text-center align-top">
@@ -371,12 +376,12 @@ const AdminTransactions = () => {
         </Card>
 
         <div className="space-y-6">
-          <Card className="rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+          <Card className="wallet-card min-w-0 rounded-[28px] border-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
             <CardHeader>
               <CardTitle>Queue signals</CardTitle>
               <CardDescription>Operational summary for payout readiness.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="grid gap-3 sm:grid-cols-3 2xl:grid-cols-1">
               {[
                 {
                   icon: ArrowRightLeft,
@@ -394,12 +399,12 @@ const AdminTransactions = () => {
                   description: String(inProviderFlowOnPage),
                 },
               ].map((item) => (
-                <div key={item.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
                     <item.icon className="h-5 w-5" />
                   </div>
-                  <div className="mt-4 text-lg font-semibold text-slate-950">{item.title}</div>
-                  <div className="mt-2 text-sm leading-7 text-slate-600">{item.description}</div>
+                  <div className="mt-3 text-sm font-medium text-slate-600">{item.title}</div>
+                  <div className="mt-2 text-3xl font-semibold tabular-nums text-slate-950">{item.description}</div>
                 </div>
               ))}
             </CardContent>
@@ -408,7 +413,7 @@ const AdminTransactions = () => {
       </div>
 
       <Dialog open={selectedTransferId !== null} onOpenChange={(open) => { if (!open) setSelectedTransferId(null); }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Transfer review</DialogTitle>
             <DialogDescription>Review the transfer lifecycle and customer-safe payment details before taking action.</DialogDescription>
@@ -419,7 +424,7 @@ const AdminTransactions = () => {
           {selectedTransfer && (
             <DialogFooter className="gap-2 sm:gap-0">
               {canReject(selectedTransfer) && <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" disabled={mutationPending} onClick={() => setPendingAction("reject")}>Reject</Button>}
-              {canApprove(selectedTransfer) && <Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={mutationPending} onClick={() => setPendingAction("approve")}>{selectedTransfer.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Approve"}</Button>}
+              {canApprove(selectedTransfer) && <Button className="bg-emerald-700 text-white hover:bg-emerald-800" disabled={mutationPending} onClick={() => setPendingAction("approve")}>{selectedTransfer.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Approve"}</Button>}
             </DialogFooter>
           )}
         </DialogContent>
@@ -479,7 +484,7 @@ const TransferActions = ({
       variant="outline"
       disabled={disabled}
       onClick={onReview}
-      className={compact ? "h-8 min-w-[82px] justify-center rounded-lg px-2 text-xs" : undefined}
+      className={compact ? "h-10 min-w-[86px] justify-center rounded-xl border-slate-300 bg-white px-3 text-xs text-slate-700 hover:border-emerald-600 hover:bg-emerald-50" : "h-10 rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-emerald-50"}
     >
       <Eye className="h-3.5 w-3.5" />
       Review
@@ -490,7 +495,7 @@ const TransferActions = ({
         variant="outline"
         disabled={disabled}
         onClick={onSync}
-        className={compact ? "h-8 min-w-[82px] justify-center rounded-lg px-2 text-xs" : undefined}
+        className={compact ? "h-10 min-w-[86px] justify-center rounded-xl border-slate-300 bg-white px-3 text-xs text-slate-700 hover:border-emerald-600 hover:bg-emerald-50" : "h-10 rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-emerald-50"}
       >
         <RefreshCcw className="h-3.5 w-3.5" />
         Sync

@@ -319,3 +319,20 @@ it("uses responsive cards instead of a horizontally scrolling technical table", 
   const { container } = renderPage(); await screen.findByText("Personal Source of Funds");
   expect(container.querySelector("table")).not.toBeInTheDocument(); expect(container.querySelector("main")).toHaveClass("min-w-0");
 });
+
+it("shows exactly one selected operational filter and resets its appearance with All requests", async () => {
+  renderPage();
+  await screen.findByText("GREENTECH GLOBAL TRADING COMPANY LIMITED");
+  const filters = within(screen.getByLabelText("Operational filters"));
+  expect(filters.getAllByRole("button", { pressed: true })).toHaveLength(1);
+  expect(filters.getByRole("button", { name: "All requests", pressed: true })).toBeEnabled();
+  fireEvent.click(filters.getByRole("button", { name: "With customer" }));
+  expect(filters.getAllByRole("button", { pressed: true })).toHaveLength(1);
+  expect(filters.getByRole("button", { name: "With customer", pressed: true })).toBeEnabled();
+  expect(filters.getByRole("button", { name: "All requests", pressed: false })).toBeEnabled();
+  expect(screen.getByLabelText("Authoritative provider RFI requests").querySelectorAll("article")).toHaveLength(1);
+  fireEvent.click(filters.getByRole("button", { name: "All requests" }));
+  expect(filters.getByRole("button", { name: "All requests", pressed: true })).toBeEnabled();
+  expect(screen.getByLabelText("Authoritative provider RFI requests").querySelectorAll("article")).toHaveLength(4);
+  expect(apiMocks.getAdminRfiCases).toHaveBeenCalledTimes(1);
+});

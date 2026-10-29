@@ -1,0 +1,254 @@
+/* Scoped to the wallet screens in this polish pass. */
+.currency-avatar {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:12px;
+  font-weight:700;
+  line-height:1;
+  font-family:system-ui,sans-serif;
+}
+.currency-avatar--regular {
+  width:42px;
+  height:42px;
+  font-size:21px;
+}
+.currency-avatar--compact {
+  width:28px;
+  height:28px;
+  border-radius:9px;
+  font-size:15px;
+}
+.currency-badge,.currency-display {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  max-width:100%;
+  vertical-align:middle;
+}
+.currency-code {
+  font-size:.875rem;
+  font-weight:650;
+  letter-spacing:.025em;
+}
+.currency-amount {
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums;
+}
+.currency-tone--emerald {
+  background:#ecfdf5;
+  color:#065f46;
+}
+.currency-tone--blue {
+  background:#eff6ff;
+  color:#1e40af;
+}
+.currency-tone--violet {
+  background:#f5f3ff;
+  color:#5b21b6;
+}
+.currency-tone--rose {
+  background:#fff1f2;
+  color:#9f1239;
+}
+.currency-tone--teal {
+  background:#f0fdfa;
+  color:#115e59;
+}
+.currency-tone--red {
+  background:#fef2f2;
+  color:#991b1b;
+}
+.currency-tone--indigo {
+  background:#eef2ff;
+  color:#3730a3;
+}
+.currency-tone--lime {
+  background:#f7fee7;
+  color:#3f6212;
+}
+.currency-tone--amber {
+  background:#fffbeb;
+  color:#92400e;
+}
+.currency-tone--orange {
+  background:#fff7ed;
+  color:#9a3412;
+}
+.currency-tone--cyan {
+  background:#ecfeff;
+  color:#155e75;
+}
+.currency-tone--purple {
+  background:#faf5ff;
+  color:#6b21a8;
+}
+.currency-tone--neutral {
+  background:#f1f5f9;
+  color:#334155;
+}
+.wallet-ui {
+  min-width:0;
+  color:#0f2442;
+}
+.wallet-ui h1 {
+  overflow-wrap:anywhere;
+  letter-spacing:-.035em;
+}
+.wallet-ui .wallet-card {
+  border-radius:20px;
+  box-shadow:0 3px 12px rgba(15,36,66,.035);
+  transition:border-color .15s,box-shadow .15s;
+}
+.wallet-ui .wallet-card:hover {
+  box-shadow:0 5px 18px rgba(15,36,66,.06);
+}
+.wallet-ui .wallet-table-scroll {
+  max-width:100%;
+  overflow-x:auto;
+  overscroll-behavior-x:contain;
+}
+.wallet-ui .wallet-table-scroll:focus-visible {
+  outline:2px solid #15803d;
+  outline-offset:-2px;
+}
+.wallet-ui .wallet-table-scroll th {
+  font-size:.75rem;
+  letter-spacing:.04em;
+}
+.wallet-ui .wallet-table-scroll td {
+  font-variant-numeric:tabular-nums;
+}
+.wallet-ui .wallet-table-scroll tbody tr:hover {
+  background:rgba(16,185,129,.035);
+}
+.wallet-ui .wallet-reference {
+  overflow-wrap:anywhere;
+  font-family:ui-monospace,monospace;
+  font-size:.75rem;
+  line-height:1.6;
+}
+.wallet-ui .wallet-action {
+  min-height:40px;
+  min-width:40px;
+}
+.wallet-ui .wallet-action:focus-visible {
+  outline:2px solid #15803d;
+  outline-offset:2px;
+}
+.wallet-ui .wallet-step {
+  min-width:0;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  padding:10px;
+  background:#f8fafc;
+}
+.wallet-ui .wallet-step[aria-current="step"] {
+  background:#ecfdf5;
+  border-color:#86efac;
+}
+.wallet-ui .wallet-step[data-complete="true"] {
+  background:#f0fdf4;
+  border-color:#bbf7d0;
+}
+.dark .wallet-ui {
+  color:#f1f5f9;
+}
+.dark .wallet-ui .wallet-step {
+  background:#1e293b;
+  border-color:#334155;
+}
+.dark .wallet-ui .wallet-step[aria-current="step"],.dark .wallet-ui .wallet-step[data-complete="true"] {
+  background:#15332b;
+  border-color:#15803d;
+}
+@media (prefers-reduced-motion:reduce) {
+  .wallet-ui .wallet-card {
+    transition:none;
+  }
+}
+/* RFI controls sit on light surfaces inside the dark Admin shell. */
+.wallet-filter {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:40px;
+  border:1px solid #94a3b8;
+  border-radius:10px;
+  background:#fff;
+  color:#334155;
+  padding:8px 14px;
+  font-size:.875rem;
+  font-weight:600;
+  transition:background .15s,border-color .15s;
+}
+.wallet-filter:hover:not(:disabled) {
+  background:#f0fdf4;
+  border-color:#15803d;
+  color:#14532d;
+}
+.wallet-filter[aria-pressed="true"] {
+  background:#166534;
+  border-color:#166534;
+  color:#fff;
+  box-shadow:0 1px 2px rgba(15,23,42,.08);
+}
+.wallet-filter[aria-pressed="true"]:hover:not(:disabled) {
+  background:#14532d;
+  color:#fff;
+}
+.wallet-filter:focus-visible {
+  outline:2px solid #15803d;
+  outline-offset:3px;
+}
+.wallet-filter:disabled {
+  cursor:not-allowed;
+  background:#f1f5f9;
+  color:#475569;
+  border-color:#cbd5e1;
+  box-shadow:none;
+}
+.wallet-filter:disabled[aria-pressed="true"] {
+  border-style:dashed;
+  border-color:#64748b;
+}
+.rfi-workspace .rfi-filter-control {
+  height:44px;
+  min-width:0;
+  border-color:#94a3b8;
+  background:#fff;
+  color:#0f172a;
+  border-radius:10px;
+}
+.rfi-workspace .rfi-filter-control::placeholder {
+  color:#64748b;
+  opacity:1;
+}
+.rfi-workspace .rfi-filter-control > svg {
+  color:#475569;
+  opacity:1;
+}
+.rfi-workspace .rfi-filter-control:hover:not(:disabled) {
+  border-color:#15803d;
+}
+.rfi-workspace .rfi-filter-control:focus-visible {
+  outline:2px solid #15803d;
+  outline-offset:2px;
+}
+.rfi-workspace .rfi-filter-control:disabled {
+  background:#f1f5f9;
+  color:#475569;
+  opacity:1;
+  cursor:not-allowed;
+}
+.rfi-request-card dl {
+  border-top:1px solid #e2e8f0;
+  padding-top:16px;
+}
+.rfi-workspace dd {
+  overflow-wrap:anywhere;
+}
