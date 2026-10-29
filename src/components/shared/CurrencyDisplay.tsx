@@ -1,32 +1,46 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import usFlag from "@/assets/flags/us.svg";
+import euFlag from "@/assets/flags/eu.svg";
+import gbFlag from "@/assets/flags/gb.svg";
+import hkFlag from "@/assets/flags/hk.svg";
+import sgFlag from "@/assets/flags/sg.svg";
+import cnFlag from "@/assets/flags/cn.svg";
+import jpFlag from "@/assets/flags/jp.svg";
+import vnFlag from "@/assets/flags/vn.svg";
+import auFlag from "@/assets/flags/au.svg";
+import caFlag from "@/assets/flags/ca.svg";
+import aeFlag from "@/assets/flags/ae.svg";
+import thFlag from "@/assets/flags/th.svg";
 import "@/styles/wallet-ui.css";
 
-// Currency identities, not country flags. All artwork is native text/CSS.
-const currencies: Record<string, { symbol: string; name: string; tone: string }> = {
-  USD: { symbol: "$", name: "US dollar", tone: "emerald" },
-  EUR: { symbol: "€", name: "Euro", tone: "blue" },
-  GBP: { symbol: "£", name: "Pound sterling", tone: "violet" },
-  HKD: { symbol: "$", name: "Hong Kong dollar", tone: "rose" },
-  SGD: { symbol: "$", name: "Singapore dollar", tone: "teal" },
-  CNY: { symbol: "¥", name: "Chinese yuan", tone: "red" },
-  JPY: { symbol: "¥", name: "Japanese yen", tone: "indigo" },
-  VND: { symbol: "₫", name: "Vietnamese dong", tone: "lime" },
-  AUD: { symbol: "$", name: "Australian dollar", tone: "amber" },
-  CAD: { symbol: "$", name: "Canadian dollar", tone: "orange" },
-  AED: { symbol: "د.إ", name: "UAE dirham", tone: "cyan" },
-  THB: { symbol: "฿", name: "Thai baht", tone: "purple" },
+// Bundled SVGs keep currency flags crisp without remote requests.
+const currencies: Record<string, { flag?: string; name: string }> = {
+  USD: { flag: usFlag, name: "US dollar" },
+  EUR: { flag: euFlag, name: "Euro" },
+  GBP: { flag: gbFlag, name: "Pound sterling" },
+  HKD: { flag: hkFlag, name: "Hong Kong dollar" },
+  SGD: { flag: sgFlag, name: "Singapore dollar" },
+  CNY: { flag: cnFlag, name: "Chinese yuan" },
+  JPY: { flag: jpFlag, name: "Japanese yen" },
+  VND: { flag: vnFlag, name: "Vietnamese dong" },
+  AUD: { flag: auFlag, name: "Australian dollar" },
+  CAD: { flag: caFlag, name: "Canadian dollar" },
+  AED: { flag: aeFlag, name: "UAE dirham" },
+  THB: { flag: thFlag, name: "Thai baht" },
 };
 
 type CurrencyProps = { currency?: string | null; size?: "compact" | "regular"; className?: string };
 const identity = (currency?: string | null) => {
   const code = currency?.trim().toUpperCase() || "—";
-  return { code, ...(currencies[code] || { symbol: "¤", name: "Currency", tone: "neutral" }) };
+  return { code, ...(currencies[code] || { name: "Currency" }) };
 };
 
 export function CurrencyAvatar({ currency, size = "regular", className }: CurrencyProps) {
-  const { symbol, tone } = identity(currency);
-  return <span aria-hidden="true" className={cn("currency-avatar", `currency-avatar--${size}`, `currency-tone--${tone}`, className)}>{symbol}</span>;
+  const { flag } = identity(currency);
+  return <span aria-hidden="true" className={cn("currency-avatar", `currency-avatar--${size}`, flag ? "currency-avatar--flag" : "currency-tone--neutral", className)}>
+    {flag ? <img src={flag} alt="" className="currency-flag" draggable={false} /> : "¤"}
+  </span>;
 }
 
 export function CurrencyBadge({ currency, size = "regular", className }: CurrencyProps) {
