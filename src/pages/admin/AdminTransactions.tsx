@@ -1,7 +1,7 @@
 import { ProviderLogo } from "@/components/shared/ProviderLogo";
 import { getProviderDisplayName } from "@/lib/providerDisplay";
 import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Clock3, Eye, ReceiptText, RefreshCcw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import NiumTransferThreeReview from "./NiumTransferThreeReview";
+import { canApproveNiumTransferThree, isNiumTransferThree } from "./niumTransferThree";
 
 type TransferAction = "approve" | "reject";
 
@@ -108,12 +110,24 @@ const canSync = (transfer: AdminTransfer) =>
   ["submitted", "pending", "completed", "failed"].includes(transfer.status.toLowerCase());
 
 const AdminTransactions = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
   const [selectedTransferId, setSelectedTransferId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<TransferAction | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const pilotDispatchStarted = useRef(false);
+  const pilotApprovalSnapshot = useRef<{ fetchedAt: number; transfer: AdminTransfer } | null>(null);
+  const [pilotSubmissionAttempted, setPilotSubmissionAttempted] = useState(false);
+  const [pilotFeedback, setPilotFeedback] = useState("");
+
+  useEffect(() => {
+    if (selectedTransferId !== 3) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [selectedTransferId]);
 
   const transfersQuery = useQuery({
     queryKey: ["admin", "transfers", page, token],
@@ -125,6 +139,9 @@ const AdminTransactions = () => {
   const transferDetailQuery = useQuery({
     queryKey: ["admin", "transfer", selectedTransferId, token],
     enabled: !!token && selectedTransferId !== null,
+    retry: false,
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => requestApi<AdminTransfer>(`${adminEndpointConfig.transfers}/${selectedTransferId}`, { method: "GET", token }),
   });
 
@@ -133,25 +150,34 @@ const AdminTransactions = () => {
   };
 
   const approveMutation = useMutation({
+    retry: false,
     mutationFn: async (transferId: number) =>
       requestApi<{ message?: string; transfer?: AdminTransfer }>(`${adminEndpointConfig.transfers}/${transferId}/approve`, {
         method: "POST",
         token,
         body: {},
       }),
-    onSuccess: async (response) => {
+    onSuccess: async (response, transferId) => {
       await invalidateTransfers();
       await queryClient.invalidateQueries({ queryKey: ["admin", "transfer", selectedTransferId, token] });
       toast({
-        title: response.transfer?.status === "pending" ? "Transfer approved and submitted" : "Transfer approved",
-        description: response.message || "The transfer approval was recorded.",
+        title: transferId === 3 && response.transfer?.status === "submission_unknown" ? "Submission outcome unknown"
+          : response.transfer?.status === "pending" ? "Transfer approved and submitted" : "Transfer approved",
+        description: transferId === 3 && response.transfer?.status === "submission_unknown"
+          ? "Do not submit again. Refresh detail and follow the existing outcome reconciliation process."
+          : response.message || "The transfer approval was recorded.",
       });
     },
-    onError: (error) => {
+    onError: (error, transferId) => {
+      if (transferId === 3) {
+        // Refresh locally captured state only; never repeat a possibly dispatched payout.
+        void queryClient.invalidateQueries({ queryKey: ["admin", "transfer", transferId, token] });
+      }
       toast({
         variant: "destructive",
-        title: "Approval failed",
-        description: error instanceof Error ? error.message : "Unable to approve this transfer.",
+        title: transferId === 3 ? "Approval outcome requires review" : "Approval failed",
+        description: transferId === 3 ? `${error instanceof Error ? error.message : "Approval could not be confirmed."} Do not resubmit; refresh detail and reconcile the outcome.`
+          : error instanceof Error ? error.message : "Unable to approve this transfer.",
       });
     },
   });
@@ -213,13 +239,37 @@ const AdminTransactions = () => {
     ["submitted", "pending"].includes(row.status.toLowerCase()),
   ).length;
   const selectedTransfer = transferDetailQuery.data;
+  const reviewNow = Math.max(now, Date.now());
+  const pilot = selectedTransfer?.id === 3;
+  const pilotApprovalAllowed = pilot && user?.status === "active" && !pilotSubmissionAttempted && !transferDetailQuery.isFetching && !transferDetailQuery.isError
+    && canApproveNiumTransferThree(selectedTransfer, user?.id, transferDetailQuery.dataUpdatedAt, reviewNow);
+  const pilotConfirmationMatches = pilotApprovalSnapshot.current?.fetchedAt === transferDetailQuery.dataUpdatedAt
+    && pilotApprovalSnapshot.current?.transfer === selectedTransfer;
+
+  useEffect(() => {
+    if (pilot && pendingAction === "approve" && !pilotConfirmationMatches) {
+      setPendingAction(null);
+      setPilotFeedback("Transfer detail changed. Review the current FX and financial terms before confirming approval again.");
+    }
+  }, [pilot, pendingAction, pilotConfirmationMatches]);
 
   const confirmAction = () => {
     if (!pendingAction || !selectedTransfer) return;
+    if (pilot && pendingAction === "approve") {
+      if (pilotDispatchStarted.current || !pilotConfirmationMatches || user?.status !== "active" || transferDetailQuery.isFetching || transferDetailQuery.isError
+        || !canApproveNiumTransferThree(selectedTransfer, user?.id, transferDetailQuery.dataUpdatedAt, Date.now())) {
+        setPendingAction(null);
+        void transferDetailQuery.refetch();
+        return;
+      }
+      pilotDispatchStarted.current = true;
+      setPilotSubmissionAttempted(true);
+      setPilotFeedback("");
+    }
     if (pendingAction === "approve") approveMutation.mutate(selectedTransfer.id);
     else rejectMutation.mutate(selectedTransfer.id);
     setPendingAction(null);
-    setSelectedTransferId(null);
+    if (!pilot) setSelectedTransferId(null);
   };
 
   return (
@@ -422,7 +472,7 @@ const AdminTransactions = () => {
         </div>
       </div>
 
-      <Dialog open={selectedTransferId !== null} onOpenChange={(open) => { if (!open) setSelectedTransferId(null); }}>
+      <Dialog open={selectedTransferId !== null} onOpenChange={(open) => { if (!open) { setSelectedTransferId(null); setPendingAction(null); } }}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Transfer review</DialogTitle>
@@ -431,10 +481,19 @@ const AdminTransactions = () => {
           {transferDetailQuery.isLoading && <div className="py-8 text-center text-slate-500">Loading transfer detail...</div>}
           {transferDetailQuery.isError && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{transferDetailQuery.error instanceof Error ? transferDetailQuery.error.message : "Unable to load transfer detail."}</div>}
           {selectedTransfer && <TransferReview transfer={selectedTransfer} />}
+          {pilot && !isNiumTransferThree(selectedTransfer) && <p role="alert">Pilot transfer binding does not match Transfer 3, GREENTECH to Andy, USD 5 to SGD LOCAL. Refresh detail and resolve the mismatch before approval.</p>}
+          {pilot && isNiumTransferThree(selectedTransfer) && <NiumTransferThreeReview key={`${selectedTransfer.id}:${transferDetailQuery.dataUpdatedAt}:${user?.id}`}
+            transfer={selectedTransfer} fetchedAt={transferDetailQuery.dataUpdatedAt} now={reviewNow}
+            refreshing={transferDetailQuery.isFetching} detailError={transferDetailQuery.isError}
+            submissionAttempted={pilotSubmissionAttempted} refreshDetail={() => transferDetailQuery.refetch()} onFeedback={setPilotFeedback} />}
+          {pilot && pilotFeedback && <p role="status">{pilotFeedback}</p>}
           {selectedTransfer && (
             <DialogFooter className="gap-2 sm:gap-0">
               {canReject(selectedTransfer) && <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" disabled={mutationPending} onClick={() => setPendingAction("reject")}>Reject</Button>}
-              {canApprove(selectedTransfer) && <Button className="bg-emerald-700 text-white hover:bg-emerald-800" disabled={mutationPending} onClick={() => setPendingAction("approve")}>{selectedTransfer.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Approve"}</Button>}
+              {(pilot || canApprove(selectedTransfer)) && <Button className="bg-emerald-700 text-white hover:bg-emerald-800" disabled={mutationPending || (pilot && !pilotApprovalAllowed)} onClick={() => {
+                if (pilot) pilotApprovalSnapshot.current = { fetchedAt: transferDetailQuery.dataUpdatedAt, transfer: selectedTransfer };
+                setPendingAction("approve");
+              }}>{selectedTransfer.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Approve"}</Button>}
             </DialogFooter>
           )}
         </DialogContent>
@@ -448,7 +507,7 @@ const AdminTransactions = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={mutationPending} onClick={confirmAction}>{pendingAction === "approve" ? (selectedTransfer?.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Confirm approval") : "Confirm rejection"}</AlertDialogAction>
+            <AlertDialogAction disabled={mutationPending || (pilot && pendingAction === "approve" && (!pilotApprovalAllowed || !pilotConfirmationMatches))} onClick={confirmAction}>{pendingAction === "approve" ? (selectedTransfer?.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Confirm approval") : "Confirm rejection"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

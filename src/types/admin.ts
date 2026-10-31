@@ -743,6 +743,36 @@ export interface AdminTransfer {
   provider_status_at?: string | null;
   created_at?: string | null;
   approvals?: AdminTransferApproval[];
+  allowed_actions?: { approve?: boolean; reject?: boolean; sync?: boolean };
+  payout_workflow?: {
+    state?: string;
+    checker_approval_allowed?: boolean;
+    can_restart_review?: boolean;
+    blockers?: string[];
+  };
+  payout_amounts?: {
+    fx_rate?: string | null;
+    fx_lock_expires_at?: string | null;
+    transfer_fee?: { amount: string; currency: string } | null;
+    total_wallet_debit?: string | null;
+  };
+  pilot_authorization_renewal?: {
+    policy: string;
+    risk_acknowledgement: string;
+    expected_fee?: { amount: string; currency: string; basis: string };
+    provider_fee_status: string;
+    total_wallet_debit: string | null;
+    renewal_allowed: boolean;
+    state: string;
+    reason?: string;
+    authorization_id?: string;
+    authorization_revision?: string | null;
+    previous_revision?: string;
+    fx_quote_id?: number;
+    fx_rate?: string;
+    expires_at?: string;
+    confirmation_token?: string;
+  } | null;
 }
 
 export interface AdminWalletAccount {
