@@ -92,7 +92,7 @@ export default function NiumTransferThreeReview({ transfer, fetchedAt, now, refr
     {preview?.reason && <p role="status">{preview.reason}</p>}
     {transfer.payout_workflow?.blockers?.map((blocker) => <p key={blocker}>{blocker}</p>)}
     {!current && <p role="alert">Transfer detail or confirmation preview is stale or refreshing. Fetch fresh detail and review the terms again.</p>}
-    {!currentFx && <p role="alert">FX is expired or unavailable. The Maker must restart the expired review, request a fresh FX lock, and explicitly confirm the new terms in their authenticated user workflow.</p>}
+    {!currentFx && <p role="alert">FX is expired or unavailable. The customer must reopen the payment review, let it prepare current FX and financial terms, and explicitly accept them before Submit.</p>}
     {!independent && <p role="alert">An active independent Admin is required. The Maker cannot accept risk or approve their own transfer.</p>}
     {!submissionAttempted && transfer.payout_workflow?.checker_approval_allowed !== true && <p role="status">Maker action required: after risk acceptance, the Maker must confirm the current financial terms in their authenticated user workflow and click Submit. Admin cannot provide customer consent.</p>}
     {!submissionAttempted && transfer.payout_workflow?.checker_approval_allowed === true && <p role="status">Current Maker review is present. Admin approval is available when all backend permissions and current FX checks pass.</p>}
