@@ -747,6 +747,18 @@ export interface AdminTransfer {
   payout_workflow?: {
     state?: string;
     checker_approval_allowed?: boolean;
+    customer_authorization?: {
+      accepted_by: number;
+      accepted_at: string;
+      risk_acknowledgement: string | null;
+      instruction: {
+        source_amount: string;
+        purpose_code: string;
+        rate: string;
+        expires_at: string;
+        receiving_account: { name: string; bank: string | null; last_four: string };
+      };
+    } | null;
     can_restart_review?: boolean;
     blockers?: string[];
   };

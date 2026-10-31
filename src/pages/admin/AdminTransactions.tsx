@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import NiumTransferThreeReview from "./NiumTransferThreeReview";
-import { canApproveNiumTransferThree, isNiumTransferThree } from "./niumTransferThree";
+import { canApproveNiumTransferThree, hasCurrentPilotDetail, isNiumTransferThree } from "./niumTransferThree";
 
 type TransferAction = "approve" | "reject";
 
@@ -98,7 +98,10 @@ type TransferListResponse = {
   };
 };
 
+const isSgdLocal = (transfer: AdminTransfer) => transfer.provider?.code?.toLowerCase() === "nium" && transfer.target_currency === "SGD";
+
 const canApprove = (transfer: AdminTransfer) =>
+  (!isSgdLocal(transfer) || (transfer.allowed_actions?.approve === true && transfer.payout_workflow?.checker_approval_allowed === true)) &&
   ["draft", "approval_required"].includes(transfer.status.toLowerCase()) &&
   !transfer.approvals?.some((approval) => approval.action === "approved");
 
@@ -118,12 +121,13 @@ const AdminTransactions = () => {
   const [pendingAction, setPendingAction] = useState<TransferAction | null>(null);
   const [now, setNow] = useState(Date.now);
   const pilotDispatchStarted = useRef(false);
+  const attemptedApprovals = useRef(new Set<number>());
   const pilotApprovalSnapshot = useRef<{ fetchedAt: number; transfer: AdminTransfer } | null>(null);
   const [pilotSubmissionAttempted, setPilotSubmissionAttempted] = useState(false);
   const [pilotFeedback, setPilotFeedback] = useState("");
 
   useEffect(() => {
-    if (selectedTransferId !== 3) return;
+    if (selectedTransferId === null) return;
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
@@ -169,15 +173,14 @@ const AdminTransactions = () => {
       });
     },
     onError: (error, transferId) => {
-      if (transferId === 3) {
+      {
         // Refresh locally captured state only; never repeat a possibly dispatched payout.
         void queryClient.invalidateQueries({ queryKey: ["admin", "transfer", transferId, token] });
       }
       toast({
         variant: "destructive",
-        title: transferId === 3 ? "Approval outcome requires review" : "Approval failed",
-        description: transferId === 3 ? `${error instanceof Error ? error.message : "Approval could not be confirmed."} Do not resubmit; refresh detail and reconcile the outcome.`
-          : error instanceof Error ? error.message : "Unable to approve this transfer.",
+        title: "Approval outcome requires review",
+        description: `${error instanceof Error ? error.message : "Approval could not be confirmed."} Do not resubmit; refresh detail and reconcile the outcome.`,
       });
     },
   });
@@ -243,6 +246,27 @@ const AdminTransactions = () => {
   const pilot = selectedTransfer?.id === 3;
   const pilotApprovalAllowed = pilot && user?.status === "active" && !pilotSubmissionAttempted && !transferDetailQuery.isFetching && !transferDetailQuery.isError
     && canApproveNiumTransferThree(selectedTransfer, user?.id, transferDetailQuery.dataUpdatedAt, reviewNow);
+  const controlledSgd = selectedTransfer && isSgdLocal(selectedTransfer);
+  const sgdApprovalAllowed = !!controlledSgd && user?.status === "active" && user.id !== selectedTransfer.user_id
+    && !attemptedApprovals.current.has(selectedTransfer.id) && !transferDetailQuery.isFetching && !transferDetailQuery.isError
+    && selectedTransfer.allowed_actions?.approve === true && selectedTransfer.payout_workflow?.checker_approval_allowed === true
+    && ["approval_required", "approved"].includes(selectedTransfer.status)
+    && hasCurrentPilotDetail(transferDetailQuery.dataUpdatedAt, reviewNow)
+    && Date.parse(selectedTransfer.payout_amounts?.fx_lock_expires_at ?? "") > reviewNow
+    && (!pilot || pilotApprovalAllowed);
+
+  const approveSelected = () => {
+    if (!selectedTransfer || mutationPending || attemptedApprovals.current.has(selectedTransfer.id)) return;
+    if (isSgdLocal(selectedTransfer) && (!sgdApprovalAllowed
+      || !hasCurrentPilotDetail(transferDetailQuery.dataUpdatedAt, Date.now())
+      || Date.parse(selectedTransfer.payout_amounts?.fx_lock_expires_at ?? "") <= Date.now())) {
+      void transferDetailQuery.refetch();
+      return;
+    }
+    attemptedApprovals.current.add(selectedTransfer.id); // Synchronous fence, including ambiguous responses.
+    if (pilot) { pilotDispatchStarted.current = true; setPilotSubmissionAttempted(true); setPilotFeedback(""); }
+    approveMutation.mutate(selectedTransfer.id);
+  };
   const pilotConfirmationMatches = pilotApprovalSnapshot.current?.fetchedAt === transferDetailQuery.dataUpdatedAt
     && pilotApprovalSnapshot.current?.transfer === selectedTransfer;
 
@@ -266,7 +290,7 @@ const AdminTransactions = () => {
       setPilotSubmissionAttempted(true);
       setPilotFeedback("");
     }
-    if (pendingAction === "approve") approveMutation.mutate(selectedTransfer.id);
+    if (pendingAction === "approve") approveSelected();
     else rejectMutation.mutate(selectedTransfer.id);
     setPendingAction(null);
     if (!pilot) setSelectedTransferId(null);
@@ -490,7 +514,8 @@ const AdminTransactions = () => {
           {selectedTransfer && (
             <DialogFooter className="gap-2 sm:gap-0">
               {canReject(selectedTransfer) && <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" disabled={mutationPending} onClick={() => setPendingAction("reject")}>Reject</Button>}
-              {(pilot || canApprove(selectedTransfer)) && <Button className="bg-emerald-700 text-white hover:bg-emerald-800" disabled={mutationPending || (pilot && !pilotApprovalAllowed)} onClick={() => {
+              {(controlledSgd || pilot || canApprove(selectedTransfer)) && <Button className="bg-emerald-700 text-white hover:bg-emerald-800" disabled={mutationPending || attemptedApprovals.current.has(selectedTransfer.id) || (controlledSgd && !sgdApprovalAllowed) || (pilot && !pilotApprovalAllowed)} onClick={() => {
+                if (controlledSgd) { approveSelected(); return; }
                 if (pilot) pilotApprovalSnapshot.current = { fetchedAt: transferDetailQuery.dataUpdatedAt, transfer: selectedTransfer };
                 setPendingAction("approve");
               }}>{selectedTransfer.provider?.code?.toLowerCase() === "nium" ? "Approve & submit" : "Approve"}</Button>}
@@ -530,6 +555,18 @@ const TransferReview = ({ transfer }: { transfer: AdminTransfer }) => {
   return <div className="space-y-4">
     <dl className="grid gap-3 sm:grid-cols-2">{fields.map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 text-sm text-slate-900">{value}</dd></div>)}</dl>
     {beneficiaryName && <div className="rounded-2xl border border-slate-200 p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Beneficiary summary</div><div className="mt-2 font-medium text-slate-900">{beneficiaryName}</div><div className="mt-1 text-sm text-slate-600">{[transfer.beneficiary?.bank_name, transfer.beneficiary?.country_code, transfer.beneficiary?.currency, transfer.beneficiary?.status].filter(Boolean).join(" · ")}</div></div>}
+    {transfer.payout_workflow && <section aria-label="Customer payment instruction" className="space-y-2 rounded-2xl border p-4">
+      <h3 className="font-medium">Customer payment instruction</h3>
+      {transfer.payout_workflow.customer_authorization ? <>
+        <p>Accepted by customer {transfer.payout_workflow.customer_authorization.accepted_by} at {transfer.payout_workflow.customer_authorization.accepted_at}</p>
+        <p>{transfer.payout_workflow.customer_authorization.instruction.source_amount} USD → SGD LOCAL · Purpose: {transfer.payout_workflow.customer_authorization.instruction.purpose_code}</p>
+        <p>Receiving account: {transfer.payout_workflow.customer_authorization.instruction.receiving_account.name} · {transfer.payout_workflow.customer_authorization.instruction.receiving_account.bank} · ending {transfer.payout_workflow.customer_authorization.instruction.receiving_account.last_four}</p>
+        <p>Accepted FX: {transfer.payout_workflow.customer_authorization.instruction.rate} SGD per USD · Expires {transfer.payout_workflow.customer_authorization.instruction.expires_at}</p>
+        {transfer.payout_workflow.customer_authorization.risk_acknowledgement && <p>Customer explicitly accepted unknown, uncapped additional NIUM charges. Total wallet debit remains unverified.</p>}
+      </> : <p>Customer acceptance of current payment terms is required. Admin cannot supply customer consent.</p>}
+      {transfer.payout_workflow.blockers?.map((blocker) => <p key={blocker} role="status">{blocker}</p>)}
+      {transfer.status === "submission_unknown" && <p role="alert">Provider outcome unknown. Do not submit again; reconcile the existing operation.</p>}
+    </section>}
     {(transfer.external_transfer_id || transfer.external_payment_id) && <div className="text-xs text-slate-500">Provider reference: {displayTransferIdentifier(transfer.external_transfer_id || transfer.external_payment_id)}</div>}
   </div>;
 };

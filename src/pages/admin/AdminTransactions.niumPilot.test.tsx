@@ -166,10 +166,8 @@ it.each(["timeout", "submission_unknown", "pending"])("fences double approval an
   const approve = screen.getByRole("button", { name: "Approve & submit" });
   expect(approve).toBeEnabled();
   fireEvent.click(approve);
-  expect(postCalls()).toHaveLength(0);
-  const confirm = await screen.findByRole("button", { name: "Approve & submit" });
-  fireEvent.click(confirm);
-  fireEvent.click(confirm);
+  fireEvent.click(approve);
+  expect(screen.queryByRole("heading", { name: "Approve and submit this transfer?" })).not.toBeInTheDocument();
   await waitFor(() => expect(postCalls()).toHaveLength(1));
   await waitFor(() => expect(detailCalls().length).toBeGreaterThanOrEqual(2));
   expect(screen.getByRole("button", { name: "Approve & submit" })).toBeDisabled();
@@ -180,28 +178,52 @@ it.each(["timeout", "submission_unknown", "pending"])("fences double approval an
   expect(postCalls()).toHaveLength(1);
 });
 
-it("disables approval again if FX expires while the confirmation dialog is open", async () => {
+it("checks wall-clock FX expiry before the single approval click", async () => {
   markMakerReviewed();
   await openReview();
-  fireEvent.click(screen.getByRole("button", { name: "Approve & submit" }));
   now += 600_001;
   fireEvent.click(screen.getByRole("button", { name: "Approve & submit" }));
   await waitFor(() => expect(detailCalls()).toHaveLength(2));
   expect(postCalls()).toHaveLength(0);
+});
+
+it("uses backend readiness and a single dispatch click for SGD transfers beyond the pilot identity", async () => {
+  markMakerReviewed();
+  detail = { ...detail, id: 30, transfer_no: "SGD-30", user_id: 72, beneficiary_id: 55, source_amount: "12.34",
+    approvals: [], pilot_authorization_renewal: null };
+  mocks.requestApi.mockImplementation((url: string, options?: { method?: string }) => {
+    if (url === "/admin/transfers?page=1") return Promise.resolve({ data: [detail] });
+    if (url === "/admin/transfers/30") return Promise.resolve(detail);
+    if (url === "/admin/transfers/30/approve") {
+      detail = { ...detail, status: "submission_unknown", allowed_actions: { approve: false } };
+      return Promise.resolve({ transfer: detail });
+    }
+    throw new Error(`Unexpected request ${options?.method} ${url}`);
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: 2, retryDelay: 0 } } });
+  render(<QueryClientProvider client={client}><AdminTransactions /></QueryClientProvider>);
+  fireEvent.click((await screen.findAllByRole("button", { name: "Review" }))[0]);
+  const approve = await screen.findByRole("button", { name: "Approve & submit" });
+  await waitFor(() => expect(approve).toBeEnabled());
+  fireEvent.click(approve);
+  fireEvent.click(approve);
+  await waitFor(() => expect(postCalls()).toHaveLength(1));
+  await screen.findByText(/Provider outcome unknown/);
+  expect(screen.queryByRole("heading", { name: "Approve and submit this transfer?" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Approve & submit" })).toBeDisabled();
 });
 
-it("closes an old confirmation when a detail refresh changes the reviewed FX terms", async () => {
+it("shows changed backend readiness without adding another confirmation panel", async () => {
   markMakerReviewed();
   const client = await openReview();
-  fireEvent.click(screen.getByRole("button", { name: "Approve & submit" }));
-  expect(await screen.findByRole("heading", { name: "Approve and submit this transfer?" })).toBeInTheDocument();
-  const changed = { ...detail, payout_amounts: { ...detail.payout_amounts, fx_rate: "1.300000001" },
+  const changed = { ...detail, allowed_actions: { approve: false },
+    payout_workflow: { state: "approval_required", checker_approval_allowed: false, blockers: ["Customer terms changed"] },
+    payout_amounts: { ...detail.payout_amounts, fx_rate: "1.300000001" },
     pilot_authorization_renewal: { ...detail.pilot_authorization_renewal!, fx_rate: "1.300000001", authorization_revision: "new-risk-revision" } };
   act(() => { client.setQueryData(["admin", "transfer", 3, "existing-admin-session"], changed); });
-  await waitFor(() => expect(screen.queryByRole("heading", { name: "Approve and submit this transfer?" })).not.toBeInTheDocument());
-  expect(screen.getByText("1.300000001")).toBeInTheDocument();
-  expect(screen.getByText(/Transfer detail changed/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Approve & submit" })).toBeDisabled());
+  expect(screen.queryByRole("heading", { name: "Approve and submit this transfer?" })).not.toBeInTheDocument();
+  expect(screen.getAllByText("Customer terms changed").length).toBeGreaterThan(0);
   expect(postCalls()).toHaveLength(0);
 });
 
