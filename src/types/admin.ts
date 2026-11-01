@@ -710,6 +710,48 @@ export interface AdminTransferApproval {
   approver?: AdminUser | null;
 }
 
+// Read-only projections from the Admin Transfer resources and NIUM workflow presentation.
+export interface AdminPayoutFinancialTerms {
+  expires_at?: string;
+  pricing_version?: string;
+  intent_sha256?: string;
+  fee_amount?: string | null;
+  fee_currency?: string;
+  total_wallet_debit?: string | null;
+  funding_basis?: string;
+  policy?: string;
+  authorization_id?: string;
+  reservation_amount?: string;
+  fee_status?: string;
+  risk_acknowledgement?: string;
+  pilot_reserve?: { currency?: string; amount?: string; charge_ceiling?: string } | null;
+  charge_ceiling?: string | null;
+  authorization_reference?: string;
+}
+
+export interface AdminPayoutInstruction {
+  transfer_id?: number;
+  transfer_no?: string;
+  user_id?: number;
+  provider_id?: number;
+  provider_context?: Record<string, unknown>;
+  beneficiary_id?: number;
+  external_beneficiary_id?: string;
+  source_currency?: string;
+  destination_currency?: string;
+  source_amount?: string;
+  purpose_code?: string;
+  client_reference?: string | null;
+  reference_text?: string;
+  payout_method?: string;
+  fx_quote_id?: number;
+  audit_id?: string;
+  rate?: string;
+  expires_at?: string;
+  receiving_account?: { name?: string | null; bank?: string | null; last_four?: string; sha256?: string };
+  financial_terms?: AdminPayoutFinancialTerms | null;
+}
+
 export interface AdminTransfer {
   id: number;
   transfer_no: string;
@@ -718,6 +760,7 @@ export interface AdminTransfer {
   user?: AdminUser | null;
   provider?: ProviderSummary | null;
   beneficiary?: {
+    id?: number;
     full_name?: string | null;
     company_name?: string | null;
     country_code?: string | null;
@@ -744,29 +787,46 @@ export interface AdminTransfer {
   created_at?: string | null;
   approvals?: AdminTransferApproval[];
   allowed_actions?: { approve?: boolean; reject?: boolean; sync?: boolean };
+  fx_rate?: string | number | null;
+  fee_currency?: string | null;
+  purpose_code?: string | null;
+  reference_text?: string | null;
+  client_reference?: string | null;
   payout_workflow?: {
     state?: string;
+    fx_lock_active?: boolean;
     checker_approval_allowed?: boolean;
+    provider_fee_status?: string;
+    dispatch_owner?: string;
+    dispatch_allowed?: boolean;
+    customer_instruction?: AdminPayoutInstruction | null;
+    submission_token?: string | null;
     customer_authorization?: {
-      accepted_by: number;
-      accepted_at: string;
-      risk_acknowledgement: string | null;
-      instruction: {
-        source_amount: string;
-        purpose_code: string;
-        rate: string;
-        expires_at: string;
-        receiving_account: { name: string; bank: string | null; last_four: string };
-      };
+      accepted_by?: number;
+      accepted_at?: string;
+      basis?: string;
+      payment_terms_accepted?: boolean;
+      purpose_confirmed?: boolean;
+      submission_token?: string;
+      risk_acknowledgement?: string | null;
+      instruction?: AdminPayoutInstruction | null;
     } | null;
+    recovery_kind?: string | null;
+    recovery_review_requested_at?: string | null;
+    can_reconcile_status?: boolean;
     can_restart_review?: boolean;
+    can_refresh_review?: boolean;
     blockers?: string[];
   };
   payout_amounts?: {
+    source_amount?: string | number;
+    source_currency?: string;
+    destination_currency?: string;
     fx_rate?: string | null;
     fx_lock_expires_at?: string | null;
     transfer_fee?: { amount: string; currency: string } | null;
     total_wallet_debit?: string | null;
+    actual_debit?: { state?: string; charge_completeness?: string; observed_total_debit?: string; currency?: string; pilot_charge_exposure?: string } | null;
   };
   pilot_authorization_renewal?: {
     policy: string;

@@ -8,7 +8,7 @@ vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return { ...actual, requestApi: apiMocks.requestApi };
 });
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: "admin-token" }) }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ token: "admin-token", user: { id: 20, status: "active" } }) }));
 
 const transfer: AdminTransfer = {
   id: 42,
@@ -29,6 +29,7 @@ const transfer: AdminTransfer = {
   submitted_at: "2026-08-24T10:00:00Z",
   created_at: "2026-08-24T09:00:00Z",
   approvals: [],
+  allowed_actions: { approve: true, reject: true, sync: true },
 };
 
 const page = (data: AdminTransfer[] = [transfer], lastPage = 1) => ({
