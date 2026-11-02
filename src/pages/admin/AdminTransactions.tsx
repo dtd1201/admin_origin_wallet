@@ -520,7 +520,8 @@ const AdminTransactions = () => {
           {transferDetailQuery.isLoading && <div className="py-8 text-center text-slate-500">Loading transfer detail...</div>}
           {transferDetailQuery.isError && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{transferDetailQuery.error instanceof Error ? transferDetailQuery.error.message : "Unable to load transfer detail."}</div>}
           {selectedTransfer && <TransferReview transfer={selectedTransfer} />}
-          {selectedTransfer && <Button variant="outline" disabled={mutationPending || transferDetailQuery.isFetching} onClick={() => void refreshDetail()}>Refresh transfer detail</Button>}
+          {selectedTransfer && (!controlledSgd || !approvalAllowed || alreadyAttempted || isResume) && <Button variant="outline" disabled={mutationPending || transferDetailQuery.isFetching} onClick={() => void refreshDetail()}>Refresh transfer detail</Button>}
+          {controlledSgd && approvalAllowed && !isResume && <p className="text-sm text-slate-600">Approve &amp; submit automatically sends this payment using the customer's accepted terms. No separate dispatch step is required.</p>}
           {alreadyAttempted && <p role="status">An approval/submission was attempted. Refresh detail to review the outcome. Only an authorized approval recorded before dispatch can be explicitly resumed.</p>}
           {controlledSgd && !approvalAllowed && !mutationPending && <p role="status">Approval unavailable. Current customer acceptance, FX, financial terms and independent checker authorization are required. Review blockers and refresh transfer detail.</p>}
           {selectedTransfer && (

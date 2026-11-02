@@ -60,7 +60,7 @@ export const canApproveSgdLocal = (transfer: AdminTransfer, adminId: number | un
     || decimal(instruction.source_amount) === "0" || !present(instruction.purpose_code) || instruction.purpose_code !== transfer.purpose_code
     || (instruction.reference_text ?? null) !== (transfer.reference_text ?? null)
     || instruction.client_reference !== transfer.client_reference
-    || !instruction.fx_quote_id || !present(instruction.audit_id)
+    || !instruction.fx_quote_id || typeof instruction.quote_id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(instruction.quote_id)
     || !present(instruction.receiving_account?.name) || !present(instruction.receiving_account?.last_four)
     || !hash(instruction.receiving_account?.sha256) || !future(instruction.expires_at, now)
     || !amounts || !sameDecimal(amounts.fx_rate, instruction.rate) || decimal(instruction.rate) === "0"

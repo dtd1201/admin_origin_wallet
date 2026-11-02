@@ -745,7 +745,8 @@ export interface AdminPayoutInstruction {
   reference_text?: string;
   payout_method?: string;
   fx_quote_id?: number;
-  audit_id?: string;
+  audit_id?: string; // Historical captured instructions only.
+  quote_id?: string;
   rate?: string;
   expires_at?: string;
   receiving_account?: { name?: string | null; bank?: string | null; last_four?: string; sha256?: string };

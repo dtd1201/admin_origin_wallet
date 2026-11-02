@@ -13,7 +13,7 @@ let now: number;
 const clients: QueryClient[] = [];
 const posts = () => mocks.requestApi.mock.calls.filter(([, options]) => options?.method === "POST");
 const gets = () => mocks.requestApi.mock.calls.filter(([url, options]) => url === "/admin/transfers/50" && options?.method === "GET");
-const future = () => new Date(now + 600_000).toISOString();
+const future = () => new Date(now + 15 * 60_000).toISOString();
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const instruction = () => detail.payout_workflow!.customer_authorization!.instruction!;
 const ready = () => screen.getByRole("button", { name: "Approve & submit" });
@@ -27,7 +27,7 @@ const fixture = (): AdminTransfer => {
     provider_context: { client: "synthetic-client", customer: "synthetic-customer", wallet: "synthetic-wallet", base_url: "synthetic-provider-base" },
     source_currency: "USD", destination_currency: "SGD", source_amount: "5", purpose_code: "IR01801",
     client_reference: "SYNTHETIC-REFERENCE", reference_text: "Invoice 50", payout_method: "LOCAL",
-    fx_quote_id: 81, audit_id: "123456", rate: "1.275939120", expires_at: future(),
+    fx_quote_id: 81, quote_id: "synthetic-payout-quote", rate: "1.275939120", expires_at: future(),
     receiving_account: { name: "Synthetic Individual", bank: "Synthetic SG Bank", last_four: "6789", sha256: "c".repeat(64) },
     financial_terms: { pricing_version: "synthetic-confirmed-pricing", intent_sha256: "b".repeat(64),
       fee_currency: "USD", fee_amount: "0", total_wallet_debit: "5", expires_at: future(),
@@ -99,10 +99,37 @@ const openReview = async () => {
   render(<QueryClientProvider client={client}><AdminTransactions /></QueryClientProvider>);
   fireEvent.click((await screen.findAllByRole("button", { name: "Review" }))[0]);
   await screen.findByRole("region", { name: "Customer payment instruction" });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Refresh transfer detail" })).toBeEnabled());
+  await waitFor(() => {
+    const refresh = screen.queryByRole("button", { name: "Refresh transfer detail" });
+    if (refresh) expect(refresh).toBeEnabled();
+    else expect(ready()).toBeEnabled();
+  });
   return client;
 };
 const expectAllowed = () => canApproveSgdLocal(detail, 20, now, now);
+
+it("blocks legacy audit IDs and missing or malformed executable payout quote IDs", () => {
+  const baseline = copy(detail);
+  for (const quoteId of [undefined, "", "invalid quote", "x".repeat(101)]) {
+    detail = copy(baseline);
+    const instruction = detail.payout_workflow!.customer_authorization!.instruction!;
+    instruction.quote_id = quoteId;
+    instruction.audit_id = "123456";
+    detail.payout_workflow!.customer_instruction = copy(instruction);
+    expect(expectAllowed()).toBe(false);
+  }
+  detail = baseline;
+  expect(expectAllowed()).toBe(true);
+});
+
+it("blocks a changed executable payout quote between display and approval", async () => {
+  await openReview();
+  await waitFor(() => expect(ready()).toBeEnabled());
+  detail.payout_workflow!.customer_instruction!.quote_id = "changed-payout-quote";
+  fireEvent.click(ready());
+  await waitFor(() => expect(gets()).toHaveLength(2));
+  expect(posts()).toHaveLength(0);
+});
 
 it("renders the saved acceptance, current FX, financial terms and customer-safe receiving account", async () => {
   await openReview();
@@ -121,6 +148,7 @@ it("renders the saved acceptance, current FX, financial terms and customer-safe 
 it("independently approves and submits once, fetching fresh detail before the unchanged Admin POST", async () => {
   await openReview();
   await waitFor(() => expect(ready()).toBeEnabled());
+  expect(screen.queryByRole("button", { name: /Resume|Refresh transfer detail|Dispatch|Save Draft/ })).not.toBeInTheDocument();
   fireEvent.click(ready()); fireEvent.click(ready());
   await waitFor(() => expect(posts()).toHaveLength(1));
   expect(posts()[0]).toEqual(["/admin/transfers/50/approve", { method: "POST", token: "admin-session", body: {} }]);
@@ -235,10 +263,36 @@ it("does not let a cached permission authorize a changed accepted instruction", 
 
 it("checks wall-clock expiry when a tab was suspended before the click", async () => {
   await openReview();
-  now += 600_001;
+  now += 15 * 60_000;
   fireEvent.click(ready());
   await waitFor(() => expect(gets()).toHaveLength(2));
   expect(posts()).toHaveLength(0);
+});
+
+it("keeps a dispatched payment on status reconciliation after its quote expires without another approval", async () => {
+  await openReview();
+  fireEvent.click(ready());
+  await waitFor(() => expect(posts()).toHaveLength(1));
+  await waitFor(() => expect(ready()).toBeDisabled());
+  now += 15 * 60_000;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh transfer detail" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Refresh transfer detail" })).toBeEnabled());
+  expect(posts()).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: /Resume|Dispatch/ })).not.toBeInTheDocument();
+  expect(ready()).toBeDisabled();
+  expect(screen.getByText(/Payment is pending/)).toBeInTheDocument();
+});
+
+it("cannot resume an approved but undispatched payment with expired customer terms", async () => {
+  markApproved();
+  await openReview();
+  const resume = screen.getByRole("button", { name: "Resume approved transfer" });
+  await waitFor(() => expect(resume).toBeEnabled());
+  now += 15 * 60_000;
+  fireEvent.click(resume);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Refresh transfer detail" })).toBeEnabled());
+  expect(posts()).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "Resume approved transfer" })).toBeDisabled();
 });
 
 it.each(["draft", "pending", "submitting", "processing", "submission_unknown", "failed", "cancelled", "rejected", "completed"])("blocks %s despite stale positive flags", async (status) => {
