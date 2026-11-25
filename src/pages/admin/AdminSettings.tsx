@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import AdminSecurity from "@/components/admin/AdminSecurity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +64,7 @@ const AdminSettings = () => {
           </CardContent>
         </Card>
       </div>
+      <AdminSecurity />
     </div>
   );
 };
