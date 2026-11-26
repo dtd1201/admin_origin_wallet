@@ -97,25 +97,37 @@ describe("Admin mandatory Google Authenticator UI and route guards", () => {
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/challenges/cancel"))).toBe(true);
   });
 
-  it("shows the approval gate when Admin enrollment policy is inactive", async () => {
+  it("shows a support message when email ownership cannot safely be established", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(response(challenge("enrollment_identity_required")))
-      .mockResolvedValueOnce(response({ next_action: "enrollment_identity_required", methods: [], policy_pending: true }));
+      .mockResolvedValueOnce(response({ next_action: "enrollment_identity_required", methods: [], support_required: true }));
     renderLogin();
     await enterCredentials();
-    expect(await screen.findByText(/Enrollment policy is unavailable/)).toBeInTheDocument();
+    expect(await screen.findByText(/We cannot safely verify an established email ownership channel/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /Scan/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId("protected")).not.toBeInTheDocument();
   });
 
-  it("renders backend QR/key and one-time codes, requiring an explicit save acknowledgment before access", async () => {
+  it("rejects obsolete grant-only enrollment methods without offering an approval input", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(response(challenge("enrollment_identity_required")))
-      .mockResolvedValueOnce(response({ next_action: "enrollment_identity_required", methods: ["operator_grant"], policy_pending: false }));
+      .mockResolvedValueOnce(response({ next_action: "enrollment_identity_required", methods: ["operator_grant"] }));
     renderLogin();
     await enterCredentials();
-    await screen.findByLabelText("Approved operator grant");
+    await screen.findByText(/We cannot safely verify an established email ownership channel/);
+    expect(screen.queryByLabelText("Approved operator grant")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Use an approved replacement grant/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("protected")).not.toBeInTheDocument();
+  });
+
+  it("renders backend QR/key and one-time codes, requiring an explicit save acknowledgment before access", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(response(challenge("enrollment_identity_required")))
+      .mockResolvedValueOnce(response({ next_action: "enrollment_identity_required", methods: ["enrollment_email_proof"], support_required: false }));
+    renderLogin();
+    await enterCredentials();
+    await screen.findByLabelText("Enrollment email code");
     vi.mocked(fetch).mockResolvedValueOnce(response(challenge("enrollment_ready", "b".repeat(64))));
-    fireEvent.change(screen.getByLabelText("Approved operator grant"), { target: { value: "c".repeat(64) } });
+    fireEvent.change(screen.getByLabelText("Enrollment email code"), { target: { value: "000123" } });
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
     await screen.findByRole("button", { name: "Show authenticator setup" });
     vi.mocked(fetch).mockResolvedValueOnce(response({ ...challenge("enrollment_ready", "b".repeat(64)), qr_svg: "<svg/>", manual_key: "SYNTHETICSETUPKEY" }));
