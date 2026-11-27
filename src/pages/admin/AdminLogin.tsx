@@ -43,7 +43,7 @@ const AdminLogin = () => {
       <CardHeader className="space-y-3">
         <ShieldCheck className="h-9 w-9 text-emerald-600" />
         <CardTitle className="text-2xl">Origin Wallet Admin</CardTitle>
-        <CardDescription>Sign in with your email, password and mandatory Google Authenticator verification.</CardDescription>
+        <CardDescription>Sign in with your email and password, then verify with Google Authenticator or an authorized email code.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <AuthMessages />

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { adminUnauthorizedEvent } from "@/lib/api";
-import { AuthFailure, newClientBinding, readChallenge, readRecoveryCodes, requestAdminAuth,
+import { AuthFailure, newClientBinding, readChallenge, readRecoveryCodes, readEmailMfa, requestAdminAuth,
   type AuthAction, type AuthChallenge, type AuthResult, type SecurityStatus } from "@/lib/admin-auth";
 import type { AdminAuthResponse, AdminUser } from "@/types/admin";
 
@@ -17,6 +17,8 @@ export interface Ceremony {
   supportRequired?: boolean;
   resendAt?: number;
   intent?: SecurityIntent;
+  emailMfa?: boolean;
+  maskedRecipient?: string;
 }
 interface AuthContextType {
   user: AdminUser | null;
@@ -33,6 +35,8 @@ interface AuthContextType {
   submitProof: (proof: string) => Promise<void>;
   resendIdentity: () => Promise<void>;
   startRecovery: () => Promise<void>;
+  requestEmailMfa: (resend?: boolean) => Promise<void>;
+  backToTotp: () => void;
   assistedRecovery: (email: string) => Promise<void>;
   cancelCeremony: () => void;
   leaveSecurity: () => void;
@@ -200,6 +204,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [acceptChallenge, run]);
 
+  const requestEmailMfa = useCallback(async (resend = false) => {
+    await run(async call => {
+      const current = ceremonyRef.current;
+      if (!current || current.challenge.next_action !== "totp_required" || !current.challenge.methods.includes("email_otp")) return;
+      if (current.expiresAt <= Date.now()) throw new AuthFailure(422, "Authentication challenge expired. Restart sign-in.");
+      if (!resend && current.maskedRecipient) {
+        changeCeremony({ ...current, emailMfa: true });
+        return;
+      }
+      if (Date.now() < (current.resendAt ?? 0)) return;
+      const result = await call("login/email/request", { challenge_token: current.challenge.challenge_token }, current.binding);
+      let delivery: ReturnType<typeof readEmailMfa>;
+      try { delivery = readEmailMfa(result); }
+      catch (error) { discardResult(result, current.binding); throw error; }
+      changeCeremony({ ...current, emailMfa: true, maskedRecipient: delivery.maskedRecipient,
+        expiresAt: Math.min(current.expiresAt, Date.now() + delivery.seconds * 1000),
+        resendAt: Date.now() + delivery.resendSeconds * 1000 });
+    });
+  }, [changeCeremony, run]);
+
+  const backToTotp = useCallback(() => {
+    const current = ceremonyRef.current;
+    if (!flight.current && current?.challenge.next_action === "totp_required") {
+      changeCeremony({ ...current, emailMfa: false });
+    }
+  }, [changeCeremony]);
+
   const resendIdentity = useCallback(async () => {
     await run(async call => {
       const current = ceremonyRef.current;
@@ -223,8 +254,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { challenge, binding, intent } = current;
       const bound = { challenge_token: challenge.challenge_token };
       const action = challenge.next_action;
+      if (current.emailMfa && (action !== "totp_required" || !challenge.methods.includes("email_otp"))) {
+        throw new AuthFailure(422, "The authentication transition is invalid. Restart sign-in.");
+      }
       if (["totp_required", "step_up_required"].includes(action) || current.manualKey) {
-        if (!/^\d{6}$/.test(proof)) throw new AuthFailure(422, "Enter a six-digit authenticator code.");
+        if (!/^\d{6}$/.test(proof)) throw new AuthFailure(422, current.emailMfa ? "Enter a six-digit email verification code." : "Enter a six-digit authenticator code.");
       }
       if (action === "enrollment_identity_required" || action === "recovery_required") {
         const path = action === "recovery_required" ? "recovery/verify" : "enrollment/identity/verify";
@@ -255,8 +289,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           manualKey: result.manual_key, qrSvg: result.qr_svg });
         return;
       }
-      const path = action === "totp_required" ? "login/verify" : action === "enrollment_ready" ? "enrollment/confirm" : "totp/replacement/confirm";
-      const result = await call(path, { ...bound, totp_code: proof }, binding);
+      const path = current.emailMfa ? "login/email/verify" : action === "totp_required" ? "login/verify" : action === "enrollment_ready" ? "enrollment/confirm" : "totp/replacement/confirm";
+      const result = await call(path, { ...bound, [current.emailMfa ? "email_code" : "totp_code"]: proof }, binding);
       if (!result.token || result.next_action) throw new AuthFailure(401, "A full Admin session was not returned. Restart sign-in.");
       // Track immediately so cancellation or failed /me validation can revoke it.
       pendingSession.current = { version: adminSessionVersion, created_at: new Date().toISOString(), token: result.token, user: result.user! };
@@ -354,9 +388,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo(() => ({ user: session?.user ?? null, token: session?.token ?? null, loading,
     authError, notice, busy, retryAt, ceremony, recoveryCodes, clearAuthError, login, submitProof,
-    startRecovery, resendIdentity, assistedRecovery, cancelCeremony, leaveSecurity, acknowledgeCodes, startStepUp, getSecurity, logout, refreshSession }),
+    startRecovery, requestEmailMfa, backToTotp, resendIdentity, assistedRecovery, cancelCeremony, leaveSecurity, acknowledgeCodes, startStepUp, getSecurity, logout, refreshSession }),
   [session, loading, authError, notice, busy, retryAt, ceremony, recoveryCodes, clearAuthError, login, submitProof,
-    startRecovery, resendIdentity, assistedRecovery, cancelCeremony, leaveSecurity, acknowledgeCodes, startStepUp, getSecurity, logout, refreshSession]);
+    startRecovery, requestEmailMfa, backToTotp, resendIdentity, assistedRecovery, cancelCeremony, leaveSecurity, acknowledgeCodes, startStepUp, getSecurity, logout, refreshSession]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 export const useAuth = () => {

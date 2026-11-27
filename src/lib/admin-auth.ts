@@ -2,7 +2,7 @@ import { adminAuthEndpointConfig, buildApiUrl } from "@/lib/api";
 import type { AdminAuthResponse } from "@/types/admin";
 
 export type AuthAction = "totp_required" | "recovery_required" | "enrollment_identity_required"
-  | "enrollment_ready" | "replacement_required" | "step_up_required" | "step_up_complete";
+  | "enrollment_ready" | "replacement_required" | "step_up_required" | "step_up_complete" | "email_otp_required";
 export interface AuthChallenge {
   next_action: AuthAction;
   challenge_token: string;
@@ -16,6 +16,7 @@ export interface AuthResult extends Partial<AuthChallenge>, Partial<AdminAuthRes
   qr_svg?: string;
   manual_key?: string;
   recovery_codes?: string[];
+  masked_recipient?: string;
 }
 export interface SecurityStatus {
   mandatory: boolean;
@@ -95,4 +96,15 @@ export function readRecoveryCodes(result: AuthResult): string[] {
     throw new AuthFailure(0, "Recovery codes were not received. Sign in again and regenerate them from Session security.");
   }
   return result.recovery_codes;
+}
+
+export function readEmailMfa(result: AuthResult) {
+  if (result.next_action !== "email_otp_required" || result.token || result.challenge_token
+    || typeof result.masked_recipient !== "string" || !/^[^@\s*]\*{3}@[^@\s]+$/.test(result.masked_recipient)
+    || result.masked_recipient.length > 255
+    || !Number.isInteger(result.expires_in_seconds) || Number(result.expires_in_seconds) <= 0 || Number(result.expires_in_seconds) > 300
+    || !Number.isInteger(result.resend_after_seconds) || Number(result.resend_after_seconds) < 120) {
+    throw new AuthFailure(422, "Email verification is unavailable. Restart sign-in.");
+  }
+  return { maskedRecipient: result.masked_recipient, seconds: Number(result.expires_in_seconds), resendSeconds: Number(result.resend_after_seconds) };
 }
